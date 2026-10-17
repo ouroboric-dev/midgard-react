@@ -295,3 +295,30 @@ func TestTDDDoesNotTrustAVitestTheAgentLeftInNodeModules(t *testing.T) {
 		t.Errorf("a planted vitest: exit %d\n%s", code, out)
 	}
 }
+
+func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
+	body := "export const a = 1;\nexport const b = 2;\nexport const c = 3;\nexport const d = 4;\n"
+	start := map[string]string{".gitignore": "node_modules/\n", "src/server.ts": body, "src/server.test.ts": "// test " + body}
+	dir := repo(t, start)
+	// Moved to a new name with a new function in it, git shows it as a rename.
+	git(t, dir, "switch", "-q", "-c", "work")
+	git(t, dir, "mv", "src/server.ts", "src/routes.ts")
+	put(t, dir, map[string]string{"src/routes.ts": body + "export const e = 5;\n"})
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "work")
+	bin := t.TempDir()
+	webTools(t, bin, map[string]string{"vitest": ""})
+	if code, out := script(t, dir, bin, "web-tdd.sh"); code == 0 || !strings.Contains(out, "src/routes.ts") {
+		t.Errorf("a renamed file with new code: exit %d\n%s", code, out)
+	}
+	// A renamed test file is a changed test: it is run on the parent.
+	dir = repo(t, start)
+	git(t, dir, "switch", "-q", "-c", "work")
+	git(t, dir, "mv", "src/server.test.ts", "src/routes.test.ts")
+	git(t, dir, "commit", "-q", "-m", "work")
+	bin = t.TempDir()
+	webTools(t, bin, map[string]string{"vitest": ""})
+	if code, out := script(t, dir, bin, "web-tdd.sh", "STUB_VITEST_EXIT=1"); code != 0 || !strings.Contains(calls(bin), "vitest run src/routes.test.ts") {
+		t.Errorf("a renamed test: exit %d, calls %q\n%s", code, calls(bin), out)
+	}
+}

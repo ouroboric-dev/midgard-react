@@ -15,12 +15,12 @@ tests=() code=() specs=()
 while IFS= read -r f; do
   [ -f "$f" ] || continue
   case "$f" in e2e/*) specs+=("$f") ;; *.test.ts | *.test.tsx) tests+=("$f") ;; esac
-done < <(git diff --name-only --diff-filter=AM "$base" HEAD -- 'src/**' 'e2e/**')
+done < <(git diff --no-renames --name-only --diff-filter=d "$base" HEAD -- 'src/**' 'e2e/**')
 while IFS= read -r f; do
   [ -f "$f" ] || continue
   case "$f" in *.test.ts | *.test.tsx | *.d.ts | src/test-setup.ts | src/index.css) continue ;; esac
   case "$f" in *.ts | *.tsx) code+=("$f") ;; esac
-done < <(git diff --name-only --diff-filter=AM "$base" HEAD -- 'src/**')
+done < <(git diff --no-renames --name-only --diff-filter=d "$base" HEAD -- 'src/**')
 
 if [ ${#tests[@]} -eq 0 ]; then
   if [ ${#code[@]} -gt 0 ] && [ ${#specs[@]} -eq 0 ]; then
