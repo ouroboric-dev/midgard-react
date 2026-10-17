@@ -174,7 +174,46 @@ chmod +x "$out"
 	if code, out := script(t, project(busyBin), busyBin, "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "already in use") || strings.Contains(calls(busyBin), "go ") {
 		t.Errorf("a busy port: exit %d, calls %q\n%s", code, calls(busyBin), out)
 	}
-	if code, out := script(t, leaf(t, map[string]string{"repos/web/contracts/api.openapi.yaml": "x"}), mk(), "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "has no repos/api/openapi.yaml") {
-		t.Errorf("no API leaf: exit %d\n%s", code, out)
+	if code, out := script(t, leaf(t, map[string]string{"repos/api/cmd/api/main.go": "package main\n", "repos/web/contracts/api.openapi.yaml": "x"}), mk(), "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "has no repos/api/openapi.yaml") {
+		t.Errorf("an API leaf with no contract: exit %d\n%s", code, out)
+	}
+}
+
+func TestAcceptanceOfAWebOnlyProductRunsTheWebAppAgainstItsOwnMock(t *testing.T) {
+	needPython(t)
+	// The database is not up and no API is built: a web-only product has neither.
+	apiPort, appPort := freePort(t), freePort(t)
+	env := []string{"YGG_DB_HOST=127.0.0.1", "YGG_DB_PORT=" + strconv.Itoa(freePort(t)), "YGG_API_PORT=" + strconv.Itoa(apiPort),
+		"YGG_APP_PORT=" + strconv.Itoa(appPort), "YGG_E2E_WAIT=5"}
+	mk := func() string {
+		bin := t.TempDir()
+		stub(t, bin, "oasdiff", `echo "oasdiff $*" >> "$(dirname "$0")/calls.log"`+"\n")
+		stub(t, bin, "go", `echo "go $*" >> "$(dirname "$0")/calls.log"`+"\n")
+		stub(t, bin, "prism", serve("--port"))
+		webTools(t, bin, webE2ETools(bin))
+		return bin
+	}
+	bin := mk()
+	dir := leaf(t, map[string]string{"repos/web/contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
+	code, out := script(t, dir, bin, "accept-e2e.sh", env...)
+	got := calls(bin)
+	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(apiPort) + " contracts/api.openapi.yaml", "vite build",
+		"app API_URL=http://127.0.0.1:" + strconv.Itoa(apiPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
+		if !strings.Contains(got, want) {
+			t.Errorf("calls lack %q:\n%s", want, got)
+		}
+	}
+	if code != 0 || strings.Contains(got, "oasdiff") || strings.Contains(got, "go ") {
+		t.Errorf("exit %d, calls %q\n%s", code, got, out)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if listening(apiPort) || listening(appPort) {
+		t.Error("a server the script started was still up when it ended")
+	}
+	// With no contract either, the web app runs with no API at all.
+	bin = mk()
+	code, out = script(t, leaf(t, map[string]string{"repos/web/package.json": "{}"}), bin, "accept-e2e.sh", env...)
+	if code != 0 || strings.Contains(calls(bin), "prism") || !strings.Contains(calls(bin), "playwright") {
+		t.Errorf("no API and no contract: exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 }
