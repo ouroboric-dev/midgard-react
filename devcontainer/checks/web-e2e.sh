@@ -27,6 +27,7 @@ wait_for() { # port name
   tail -n 15 "$log/$2.log" 2>/dev/null || true
   exit 1
 }
+"$(dirname "$0")/web-protected.sh"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
 npm ci --no-audit --no-fund
 echo "== mock API from contracts/api.openapi.yaml"

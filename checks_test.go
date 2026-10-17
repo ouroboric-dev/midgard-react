@@ -264,7 +264,7 @@ func TestStaticRefusesAChangeToTheConfigurationItReads(t *testing.T) {
 func TestUnitInstallsCleanAndRunsVitestByPath(t *testing.T) {
 	bin := t.TempDir()
 	webTools(t, bin, map[string]string{"vitest": ""})
-	dir := leaf(t, map[string]string{"package.json": "{}"})
+	dir := repo(t, map[string]string{"package.json": "{}"})
 	tamper(t, dir, "vitest")
 	code, out := script(t, dir, bin, "web-unit.sh", "STUB_VITEST_EXIT=1")
 	if code == 0 || strings.Contains(out, "TAMPERED") {
@@ -272,13 +272,13 @@ func TestUnitInstallsCleanAndRunsVitestByPath(t *testing.T) {
 	}
 	bin = t.TempDir()
 	webTools(t, bin, map[string]string{"vitest": ""})
-	if code, _ := script(t, leaf(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --no-audit --no-fund\nvitest run\n" {
+	if code, _ := script(t, repo(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --no-audit --no-fund\nvitest run\n" {
 		t.Errorf("calls = %q", calls(bin))
 	}
 }
 
 func TestTDDWantsTheNewTestsToFailOnTheCommitTheTaskStartedFrom(t *testing.T) {
-	start := map[string]string{"node_modules/.keep": "", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n", "src/a.test.ts": "// test\n"}
+	start := map[string]string{"package.json": "{}", "node_modules/.keep": "", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n", "src/a.test.ts": "// test\n"}
 	// vitest stands in for the real one, installed by "npm ci" into node_modules/.bin: it fails on the parent
 	// when the parent lacks the code the new test needs, as a real run does, and logs where it ran and what
 	// was there.
@@ -338,7 +338,7 @@ exit "${STUB_PARENT_EXIT:-0}"
 func TestTDDDoesNotTrustAVitestTheAgentLeftInNodeModules(t *testing.T) {
 	// The planted vitest fails whatever it runs, which would make "the new tests fail on the parent" true.
 	// The real one, installed clean, passes a test of nothing new, so the check must refuse.
-	start := map[string]string{".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n"}
+	start := map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n"}
 	dir := repo(t, start)
 	work(t, dir, map[string]string{"src/b.test.ts": "// test\n"})
 	bin := t.TempDir()
@@ -355,7 +355,7 @@ func TestTDDDoesNotTrustAVitestTheAgentLeftInNodeModules(t *testing.T) {
 
 func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 	body := "export const a = 1;\nexport const b = 2;\nexport const c = 3;\nexport const d = 4;\n"
-	start := map[string]string{".gitignore": "node_modules/\n", "src/server.ts": body, "src/server.test.ts": "// test " + body}
+	start := map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "src/server.ts": body, "src/server.test.ts": "// test " + body}
 	dir := repo(t, start)
 	// Moved to a new name with a new function in it, git shows it as a rename.
 	git(t, dir, "switch", "-q", "-c", "work")
@@ -377,5 +377,48 @@ func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 	webTools(t, bin, map[string]string{"vitest": ""})
 	if code, out := script(t, dir, bin, "web-tdd.sh", "STUB_VITEST_EXIT=1"); code != 0 || !strings.Contains(calls(bin), "vitest run src/routes.test.ts") {
 		t.Errorf("a renamed test: exit %d, calls %q\n%s", code, calls(bin), out)
+	}
+}
+
+// Every rung of the web ladder refuses a change to the configuration it reads before it installs or runs
+// anything, so a rung run alone is protected too. An added file counts: vitest.config.ts wins over
+// vite.config.ts, vite.config.js over vite.config.ts, and a leaf .npmrc changes how npm runs the scripts
+// of the packages.
+func TestEveryWebRungRefusesAChangeToTheConfiguration(t *testing.T) {
+	start := map[string]string{".gitignore": "node_modules/\n.npmrc.local\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
+		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
+	rungs := []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-security.sh", "web-e2e.sh"}
+	added := []string{"vitest.config.ts", "vitest.config.mts", "vitest.workspace.ts", "vite.config.js", "vite.config.mjs", "eslint.config.mjs", "eslint.config.ts", "tsconfig.app.json", "tsconfig.build.json", "playwright.config.js", ".npmrc"}
+	for _, rung := range rungs {
+		for _, name := range added {
+			dir := repo(t, start)
+			work(t, dir, map[string]string{name: "x\n"})
+			bin := t.TempDir()
+			webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""})
+			code, out := script(t, dir, bin, rung)
+			if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, name) || calls(bin) != "" {
+				t.Errorf("%s with an added %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
+			}
+		}
+		// Modified, deleted, and added but not committed (or ignored by git) all count.
+		dir := repo(t, start)
+		work(t, dir, map[string]string{"vite.config.ts": "export default {x: 1};\n"})
+		bin := t.TempDir()
+		webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""})
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "vite.config.ts") || calls(bin) != "" {
+			t.Errorf("%s with a changed vite.config.ts: exit %d\n%s", rung, code, out)
+		}
+		dir = repo(t, start)
+		git(t, dir, "switch", "-q", "-c", "work")
+		git(t, dir, "rm", "-q", "playwright.config.ts")
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "playwright.config.ts") || calls(bin) != "" {
+			t.Errorf("%s with a deleted playwright.config.ts: exit %d\n%s", rung, code, out)
+		}
+		dir = repo(t, start)
+		git(t, dir, "switch", "-q", "-c", "work")
+		put(t, dir, map[string]string{"vitest.config.ts": "x\n", ".npmrc": "script-shell=./sh\n"})
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "vitest.config.ts") || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
+			t.Errorf("%s with files not committed: exit %d\n%s", rung, code, out)
+		}
 	}
 }

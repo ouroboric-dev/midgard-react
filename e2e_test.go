@@ -66,7 +66,7 @@ func TestE2EStartsAMockAndTheAppRunsPlaywrightAndStopsThem(t *testing.T) {
 		webTools(t, bin, webE2ETools(bin))
 		return bin
 	}
-	leafWith := func(bin string, files map[string]string) string { return leaf(t, files) }
+	leafWith := func(bin string, files map[string]string) string { files["package.json"] = "{}"; return repo(t, files) }
 	bin := mk()
 	dir := leafWith(bin, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
 	code, out := script(t, dir, bin, "web-e2e.sh", env...)
