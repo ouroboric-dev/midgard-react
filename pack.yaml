@@ -1,0 +1,29 @@
+# The React flavor of the Midgard realm (change realm-leaf-naming): the lead realm of the client gallery. It
+# holds the graph of a web product (spec §4.2), the planning prompts and reviewers, and the recipe of a React
+# web leaf. A project that also needs a Go API pins helheim-go for that leaf. The check ladder is rungs 1 to
+# 5 of spec §9.5 in the task's loop; rung 6 is the three reviewers in the graph; the acceptance run is the
+# pointer move's, and rung 7 is the grader's.
+name: midgard-react
+version: 0.1.0
+graph: graph.yaml
+checks:
+  static: [/opt/ygg/checks/web-static.sh]
+  unit: [/opt/ygg/checks/web-unit.sh]
+  tdd: [/opt/ygg/checks/web-tdd.sh]
+  contract: [/opt/ygg/checks/web-contract.sh]
+  security: [/opt/ygg/checks/web-security.sh]
+  e2e: [/opt/ygg/checks/web-e2e.sh]
+  accept: [/opt/ygg/checks/accept-e2e.sh]
+leaf:
+  description: A React web app that talks to its API through a typed contract
+  template: templates/web
+  first_commit: [LICENSE]
+  implementer: prompts/implementer.md
+  checks: [static, unit, tdd, contract, security, e2e]
+sandbox:
+  build: devcontainer
+  target: web
+  egress: [registry.npmjs.org, api.osv.dev]
+  acceptance:
+    build: devcontainer
+    target: acceptance
