@@ -23,9 +23,41 @@ change proposal `2026-10-17-realm-leaf-naming`).
   tied to one leaf (planner, initializer, reviewers). The api leaf's recipe is `helheim-go`'s.
 - Its templates are copied into products, so they are MIT-licensed (`templates/`).
 
+## What is here
+
+- `pack.yaml`: the leaf recipe (template, implementer prompt, the ladder by name), the check scripts, and
+  the sandbox: two images built from `devcontainer/`, the leaf's stack (`web`) and the one for acceptance
+  checks (`acceptance`, with Go).
+- `graph.yaml`: the stages of a web product (spec §4.2). The planning stages run in scratch workspaces and
+  Odin publishes their documents after the approval points; a design-conformance reviewer checks the spec
+  against the design and the spec gate stops on a deviation; a reuse review reads the plan; the plan is read
+  into tasks and the leaves are created from their realms' templates. Then, for every task: the implementer
+  in a loop with the check ladder and three reviewers (spec compliance, simplicity, quality), the merge
+  gate, and the pointer move with the acceptance run.
+- `prompts/`: planner, conformance, reuse-review, implementer and reviewer prompts. A planner prompt tells
+  where its documents go; a test checks the examples in them against the schemas Odin reads.
+- `devcontainer/Containerfile` and `devcontainer/checks/`: the stack and the ladder's scripts. `web-static`,
+  `web-unit`, `web-tdd` (new tests fail on the commit the task started from), `web-contract`, `web-security`
+  and `web-e2e` (Playwright against the built app and a Prism mock of the contract) make the leaf's ladder.
+  `accept-e2e` is the acceptance run: on a snapshot of the project it checks the API still keeps what the
+  web app's copy of the contract promises (the copy may lag; the API may not break it), builds and starts
+  the API against Postgres, and runs the Playwright specs.
+- `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
+  and Query, a typed client for the contract, a tested component and a Playwright spec.
+
+## Tests
+
+`go test ./...` checks the pack, the graph and the prompts against Gungnir's schemas; runs the scripts on
+small leaves with stand-ins for the image's tools (and python3 for the servers); and builds the template,
+which needs the npm registry the first time (set `YGG_REQUIRE_TEMPLATES` to fail instead of skipping when
+it cannot be reached). The image and the tools in it are checked on a real engine (Phase 5b, v0-H14).
+
 ## Depends on
 
 - Gungnir's schemas.
+- Havamal's `ponytail-review` skill, for the reuse review and the simplicity reviewer.
+- A lead realm's graph names the roles `planner`, `implementer` and `reviewer`: the operator's
+  `factory.yaml` defines them.
 
 ## Source
 
