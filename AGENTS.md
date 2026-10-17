@@ -1,6 +1,7 @@
-# AGENTS.md: realm-web
+# AGENTS.md: midgard-react
 
-The web realm: graph, prompts, devcontainer stack layer, templates and checks.
+The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for
+web frontends.
 
 Follow the Yggdrasil invariants:
 https://github.com/ouroboric-dev/yggdrasil/blob/main/AGENTS.md#invariants
