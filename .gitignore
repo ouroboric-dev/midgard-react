@@ -1,6 +1,9 @@
 # Build output
 /bin/
-/dist/
+
+# Node build output and dependencies, at any depth
+node_modules/
+dist/
 
 # Test and coverage output
 *.test
