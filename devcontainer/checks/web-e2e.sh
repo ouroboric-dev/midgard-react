@@ -27,17 +27,20 @@ wait_for() { # port name
   tail -n 15 "$log/$2.log" 2>/dev/null || true
   exit 1
 }
-[ -d node_modules ] || npm ci --no-audit --no-fund
+"$(dirname "$0")/web-protected.sh"
+# A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
+npm ci --ignore-scripts --no-audit --no-fund
 echo "== mock API from contracts/api.openapi.yaml"
 prism mock --host 127.0.0.1 --port "$mock_port" contracts/api.openapi.yaml >"$log/mock.log" 2>&1 &
 pids+=($!)
 wait_for "$mock_port" mock
 echo "== build"
-npm run build
+node_modules/.bin/tsc --noEmit -p tsconfig.json
+node_modules/.bin/vite build
 echo "== app"
 # vite itself, not npx: the pid kept is the server's, so stopping it stops the server.
 (API_URL="http://127.0.0.1:$mock_port" exec node_modules/.bin/vite preview --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
 pids+=($!)
 wait_for "$app_port" app
 echo "== playwright"
-E2E_URL="http://127.0.0.1:$app_port" npx playwright test
+E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test

@@ -38,7 +38,7 @@ func needPackages(t *testing.T, dir string) {
 		}
 		t.Skip("npm is not installed (set YGG_REQUIRE_TEMPLATES to fail instead)")
 	}
-	if out, err := inDir(t, dir, "npm", "ci", "--no-audit", "--no-fund"); err != nil {
+	if out, err := inDir(t, dir, "npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"); err != nil {
 		if os.Getenv("YGG_REQUIRE_TEMPLATES") != "" {
 			t.Fatalf("npm ci: %v\n%s", err, out)
 		}

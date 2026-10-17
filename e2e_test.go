@@ -2,9 +2,7 @@ package midgard
 
 import (
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -46,6 +44,18 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
+// webE2ETools are the tools npm ci installs for the e2e scripts: vite serves the built app on the port after
+// --port and logs the API it was given, tsc and Playwright log (Playwright exits as STUB_PLAYWRIGHT_EXIT says).
+func webE2ETools(bin string) map[string]string {
+	return map[string]string{
+		"tsc":        "",
+		"playwright": `echo "playwright E2E_URL=$E2E_URL" >> "` + bin + `/calls.log"; exit "${STUB_PLAYWRIGHT_EXIT:-0}"` + "\n",
+		"vite": `echo "vite $*" >> "` + bin + `/calls.log"` + "\n" +
+			`[ "$1" = preview ] || exit 0` + "\n" +
+			`echo "app API_URL=$API_URL" >> "` + bin + `/calls.log"` + "\n" + serve("--port"),
+	}
+}
+
 func TestE2EStartsAMockAndTheAppRunsPlaywrightAndStopsThem(t *testing.T) {
 	needPython(t)
 	mockPort, appPort := freePort(t), freePort(t)
@@ -53,32 +63,15 @@ func TestE2EStartsAMockAndTheAppRunsPlaywrightAndStopsThem(t *testing.T) {
 	mk := func() string {
 		bin := t.TempDir()
 		stub(t, bin, "prism", serve("--port"))
-		stub(t, bin, "npm", `echo "npm $*" >> "$(dirname "$0")/calls.log"`+"\n")
-		stub(t, bin, "npx", `d="$(dirname "$0")"
-case "$1" in
-  playwright) echo "playwright E2E_URL=$E2E_URL" >> "$d/calls.log"; exit "${STUB_PLAYWRIGHT_EXIT:-0}" ;;
-esac
-`)
-		// The app is vite from the leaf's own node_modules, run directly so that its pid is the server's.
-		stub(t, bin, "vite", `echo "app API_URL=$API_URL" >> "`+bin+`/calls.log"`+"\n"+serve("--port"))
+		webTools(t, bin, webE2ETools(bin))
 		return bin
 	}
-	// leafWith makes the leaf, with the stub vite where the script looks for it.
-	leafWith := func(bin string, files map[string]string) string {
-		dir := leaf(t, files)
-		if err := os.MkdirAll(filepath.Join(dir, "node_modules", ".bin"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(filepath.Join(bin, "vite"), filepath.Join(dir, "node_modules", ".bin", "vite")); err != nil {
-			t.Fatal(err)
-		}
-		return dir
-	}
+	leafWith := func(bin string, files map[string]string) string { files["package.json"] = "{}"; return repo(t, files) }
 	bin := mk()
 	dir := leafWith(bin, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
 	code, out := script(t, dir, bin, "web-e2e.sh", env...)
 	got := calls(bin)
-	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(mockPort) + " contracts/api.openapi.yaml", "npm run build",
+	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(mockPort) + " contracts/api.openapi.yaml", "npm ci --ignore-scripts --no-audit --no-fund", "vite build",
 		"app API_URL=http://127.0.0.1:" + strconv.Itoa(mockPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
 		if !strings.Contains(got, want) {
 			t.Errorf("calls lack %q:\n%s", want, got)
@@ -139,30 +132,16 @@ exec python3 -m http.server "\$PORT" --bind 127.0.0.1 >/dev/null 2>&1
 EOS
 chmod +x "$out"
 `)
-		stub(t, bin, "npm", `echo "npm $*" >> "$(dirname "$0")/calls.log"`+"\n")
-		stub(t, bin, "npx", `d="$(dirname "$0")"
-case "$1" in
-  playwright) echo "playwright E2E_URL=$E2E_URL" >> "$d/calls.log"; exit "${STUB_PLAYWRIGHT_EXIT:-0}" ;;
-esac
-`)
-		stub(t, bin, "vite", `echo "app API_URL=$API_URL" >> "`+bin+`/calls.log"`+"\n"+serve("--port"))
+		webTools(t, bin, webE2ETools(bin))
 		return bin
 	}
-	// project makes the snapshot, with the stub vite where the script looks for the web leaf's own.
 	project := func(bin string) string {
-		dir := leaf(t, map[string]string{"repos/api/openapi.yaml": "openapi: 3.1.0\n", "repos/api/cmd/api/main.go": "package main\n", "repos/web/contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
-		if err := os.MkdirAll(filepath.Join(dir, "repos/web/node_modules/.bin"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(filepath.Join(bin, "vite"), filepath.Join(dir, "repos/web/node_modules/.bin/vite")); err != nil {
-			t.Fatal(err)
-		}
-		return dir
+		return leaf(t, map[string]string{"repos/api/openapi.yaml": "openapi: 3.1.0\n", "repos/api/cmd/api/main.go": "package main\n", "repos/web/contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
 	}
 	bin := mk()
 	code, out := script(t, project(bin), bin, "accept-e2e.sh", env...)
 	got := calls(bin)
-	for _, want := range []string{"oasdiff breaking repos/web/contracts/api.openapi.yaml repos/api/openapi.yaml --fail-on ERR", "api PORT=" + strconv.Itoa(apiPort) + " DATABASE_URL=postgres://postgres@127.0.0.1:", "npm ci --no-audit --no-fund", "npm run build",
+	for _, want := range []string{"oasdiff breaking repos/web/contracts/api.openapi.yaml repos/api/openapi.yaml --fail-on ERR", "api PORT=" + strconv.Itoa(apiPort) + " DATABASE_URL=postgres://postgres@127.0.0.1:", "npm ci --ignore-scripts --no-audit --no-fund", "npm ci --ignore-scripts --no-audit --no-fund", "vite build",
 		"app API_URL=http://127.0.0.1:" + strconv.Itoa(apiPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
 		if !strings.Contains(got, want) {
 			t.Errorf("calls lack %q:\n%s", want, got)
@@ -195,7 +174,46 @@ esac
 	if code, out := script(t, project(busyBin), busyBin, "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "already in use") || strings.Contains(calls(busyBin), "go ") {
 		t.Errorf("a busy port: exit %d, calls %q\n%s", code, calls(busyBin), out)
 	}
-	if code, out := script(t, leaf(t, map[string]string{"repos/web/contracts/api.openapi.yaml": "x"}), mk(), "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "has no repos/api/openapi.yaml") {
-		t.Errorf("no API leaf: exit %d\n%s", code, out)
+	if code, out := script(t, leaf(t, map[string]string{"repos/api/cmd/api/main.go": "package main\n", "repos/web/contracts/api.openapi.yaml": "x"}), mk(), "accept-e2e.sh", env...); code == 0 || !strings.Contains(out, "has no repos/api/openapi.yaml") {
+		t.Errorf("an API leaf with no contract: exit %d\n%s", code, out)
+	}
+}
+
+func TestAcceptanceOfAWebOnlyProductRunsTheWebAppAgainstItsOwnMock(t *testing.T) {
+	needPython(t)
+	// The database is not up and no API is built: a web-only product has neither.
+	apiPort, appPort := freePort(t), freePort(t)
+	env := []string{"YGG_DB_HOST=127.0.0.1", "YGG_DB_PORT=" + strconv.Itoa(freePort(t)), "YGG_API_PORT=" + strconv.Itoa(apiPort),
+		"YGG_APP_PORT=" + strconv.Itoa(appPort), "YGG_E2E_WAIT=5"}
+	mk := func() string {
+		bin := t.TempDir()
+		stub(t, bin, "oasdiff", `echo "oasdiff $*" >> "$(dirname "$0")/calls.log"`+"\n")
+		stub(t, bin, "go", `echo "go $*" >> "$(dirname "$0")/calls.log"`+"\n")
+		stub(t, bin, "prism", serve("--port"))
+		webTools(t, bin, webE2ETools(bin))
+		return bin
+	}
+	bin := mk()
+	dir := leaf(t, map[string]string{"repos/web/contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
+	code, out := script(t, dir, bin, "accept-e2e.sh", env...)
+	got := calls(bin)
+	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(apiPort) + " contracts/api.openapi.yaml", "vite build",
+		"app API_URL=http://127.0.0.1:" + strconv.Itoa(apiPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
+		if !strings.Contains(got, want) {
+			t.Errorf("calls lack %q:\n%s", want, got)
+		}
+	}
+	if code != 0 || strings.Contains(got, "oasdiff") || strings.Contains(got, "go ") {
+		t.Errorf("exit %d, calls %q\n%s", code, got, out)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if listening(apiPort) || listening(appPort) {
+		t.Error("a server the script started was still up when it ended")
+	}
+	// With no contract either, the web app runs with no API at all.
+	bin = mk()
+	code, out = script(t, leaf(t, map[string]string{"repos/web/package.json": "{}"}), bin, "accept-e2e.sh", env...)
+	if code != 0 || strings.Contains(calls(bin), "prism") || !strings.Contains(calls(bin), "playwright") {
+		t.Errorf("no API and no contract: exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 }
