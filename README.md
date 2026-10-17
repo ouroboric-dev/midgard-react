@@ -14,6 +14,13 @@ go test ./...
 go vet ./...
 ```
 
+## What it holds
+
+The lead realm of a web product for the factory: the graph from a brief to a merged, accepted product, the
+prompts of each stage, a stack image with the check ladder's tools, the ladder's scripts and the web app
+template. A run loads it by name from the realm store (`--realm midgard-react`). See
+[the architecture](docs/architecture.md).
+
 ## Docs
 
 - Architecture: [docs/architecture.md](docs/architecture.md)

@@ -1,0 +1,4 @@
+{
+  "name": "web",
+  "image": "docker.io/library/node@sha256:efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562"
+}
