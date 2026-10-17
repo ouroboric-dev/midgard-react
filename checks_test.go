@@ -170,7 +170,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	tools := map[string]string{"eslint": "", "tsc": "", "vite": ""}
 	bin := t.TempDir()
 	webTools(t, bin, tools)
-	if code, out := script(t, leaf(t, map[string]string{"package.json": "{}"}), bin, "web-static.sh"); code != 0 {
+	if code, out := script(t, repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"}), bin, "web-static.sh"); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	want := "npm ci --no-audit --no-fund\neslint .\ntsc --noEmit -p tsconfig.json\ntsc --noEmit -p tsconfig.json\nvite build\n"
@@ -181,7 +181,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	// node_modules is not what runs, and the check does not trust the folder.
 	bin = t.TempDir()
 	webTools(t, bin, tools)
-	dir := leaf(t, map[string]string{"package.json": "{}"})
+	dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"})
 	tamper(t, dir, "eslint", "tsc", "vite")
 	code, out := script(t, dir, bin, "web-static.sh", "STUB_ESLINT_EXIT=1")
 	if code == 0 || strings.Contains(out, "TAMPERED") || !strings.HasPrefix(calls(bin), "npm ci --no-audit --no-fund\n") {
@@ -193,14 +193,71 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	// A failing step ends it: the later ones do not run.
 	bin = t.TempDir()
 	webTools(t, bin, tools)
-	code, out = script(t, leaf(t, map[string]string{"package.json": "{}"}), bin, "web-static.sh", "STUB_TSC_EXIT=2", "STUB_TSC_OUT=src/a.ts(1,1): error TS2322")
+	code, out = script(t, repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"}), bin, "web-static.sh", "STUB_TSC_EXIT=2", "STUB_TSC_OUT=src/a.ts(1,1): error TS2322")
 	if code == 0 || !strings.Contains(out, "TS2322") || strings.Contains(calls(bin), "vite build") {
 		t.Errorf("a type error: exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 	bin = t.TempDir()
 	webTools(t, bin, tools)
-	if code, out := script(t, leaf(t, map[string]string{"package.json": "{}", "docs/Bad Name.md": "x"}), bin, "web-static.sh"); code == 0 || !strings.Contains(out, "docs:") {
+	if code, out := script(t, repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "docs/Bad Name.md": "x"}), bin, "web-static.sh"); code == 0 || !strings.Contains(out, "docs:") {
 		t.Errorf("a bad document: exit %d\n%s", code, out)
+	}
+}
+
+func TestStaticRefusesAChangeToTheConfigurationItReads(t *testing.T) {
+	pkg := func(scripts, deps string) string {
+		return `{"scripts": {` + scripts + `}, "dependencies": {` + deps + `}}`
+	}
+	start := map[string]string{".gitignore": "node_modules/\n", "package.json": pkg(`"lint": "eslint ."`, `"react": "1.0.0"`), "eslint.config.js": "export default [];\n",
+		"tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
+	cases := []struct {
+		name  string
+		files map[string]string
+		fails string // the file named in the refusal; empty when the change is fine
+	}{
+		{"eslint config", map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"}, "eslint.config.js"},
+		{"tsconfig", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, "tsconfig.json"},
+		{"vite config", map[string]string{"vite.config.ts": "export default {test: {passWithNoTests: true}};\n"}, "vite.config.ts"},
+		{"playwright config", map[string]string{"playwright.config.ts": "export default {retries: 9};\n"}, "playwright.config.ts"},
+		{"a script of package.json", map[string]string{"package.json": pkg(`"lint": "eslint . || true"`, `"react": "1.0.0"`)}, "package.json"},
+		{"a new script", map[string]string{"package.json": pkg(`"lint": "eslint .", "test": "true"`, `"react": "1.0.0"`)}, "package.json"},
+		{"the dependencies of package.json", map[string]string{"package.json": pkg(`"lint": "eslint ."`, `"react": "1.0.0", "zod": "3.0.0"`)}, ""},
+		{"app code only", map[string]string{"src/a.ts": "export const a = 2;\n"}, ""},
+	}
+	for _, c := range cases {
+		dir := repo(t, start)
+		work(t, dir, c.files)
+		bin := t.TempDir()
+		webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": ""})
+		code, out := script(t, dir, bin, "web-static.sh")
+		if c.fails == "" {
+			if code != 0 {
+				t.Errorf("%s: exit %d\n%s", c.name, code, out)
+			}
+			continue
+		}
+		if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, c.fails) || calls(bin) != "" {
+			t.Errorf("%s: exit %d, calls %q, want a refusal naming %s\n%s", c.name, code, calls(bin), c.fails, out)
+		}
+	}
+	// A change not committed yet counts, and so does a deleted file.
+	dir := repo(t, start)
+	put(t, dir, map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"})
+	bin := t.TempDir()
+	webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": ""})
+	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, "eslint.config.js") {
+		t.Errorf("an uncommitted change: exit %d\n%s", code, out)
+	}
+	dir = repo(t, start)
+	git(t, dir, "switch", "-q", "-c", "work")
+	git(t, dir, "rm", "-q", "tsconfig.json")
+	git(t, dir, "commit", "-q", "-m", "gone")
+	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, "tsconfig.json") {
+		t.Errorf("a deleted config: exit %d\n%s", code, out)
+	}
+	// With no main to compare with the check cannot tell, and refuses.
+	if code, out := script(t, leaf(t, start), bin, "web-static.sh"); code == 0 || !strings.Contains(out, "no main") {
+		t.Errorf("no main: exit %d\n%s", code, out)
 	}
 }
 
