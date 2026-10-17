@@ -2,15 +2,16 @@
 # Rung 1 of the ladder for a web leaf (spec §9.5): the packages are what package-lock.json says, the code
 # is linted and type-checked and it builds, and the docs are in order. Run in the leaf's top folder.
 set -euo pipefail
-if [ ! -d node_modules ]; then
-  echo "== npm ci"
-  npm ci --no-audit --no-fund
-fi
+# A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there
+# runs. The tools are called by path, not through the scripts of package.json.
+echo "== npm ci"
+npm ci --no-audit --no-fund
 echo "== eslint"
-npm run lint
+node_modules/.bin/eslint .
 echo "== tsc"
-npm run typecheck
+node_modules/.bin/tsc --noEmit -p tsconfig.json
 echo "== build"
-npm run build
+node_modules/.bin/tsc --noEmit -p tsconfig.json
+node_modules/.bin/vite build
 echo "== docs"
 "$(dirname "$0")/docs.sh"

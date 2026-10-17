@@ -6,13 +6,14 @@
 set -euo pipefail
 c=contracts/api.openapi.yaml
 [ -f "$c" ] || { echo "contract: this leaf has no $c"; exit 1; }
-[ -d node_modules ] || npm ci --no-audit --no-fund
+# A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
+npm ci --no-audit --no-fund
 echo "== openapi lint"
 vacuum lint --no-style --details --fail-severity error "$c"
 echo "== generated types"
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
-npx openapi-typescript "$c" -o "$tmp/schema.d.ts" >/dev/null
+node_modules/.bin/openapi-typescript "$c" -o "$tmp/schema.d.ts" >/dev/null
 if ! diff -q "$tmp/schema.d.ts" src/api/schema.d.ts >/dev/null; then
   echo "contract: src/api/schema.d.ts is not what $c generates; run npm run gen:api"
   exit 1

@@ -8,7 +8,8 @@
 # Run in the leaf's top folder, on the run branch; main is where the task started from.
 set -euo pipefail
 base="$(git merge-base HEAD main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
-[ -d node_modules ] || npm ci --no-audit --no-fund
+# A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
+npm ci --no-audit --no-fund
 
 tests=() code=() specs=()
 while IFS= read -r f; do
@@ -46,7 +47,7 @@ for f in "${tests[@]}"; do
   cp -- "$f" "$parent/$f"
 done
 log="$parent/.tdd.log"
-if (cd "$parent" && npx vitest run "${tests[@]}") >"$log" 2>&1; then
+if (cd "$parent" && node_modules/.bin/vitest run "${tests[@]}") >"$log" 2>&1; then
   echo "tdd: the new tests pass on the commit the task started from, so they test nothing new:"
   printf '  %s\n' "${tests[@]}"
   echo "A test of new behaviour fails before the code for it exists. Change the tests so they do."

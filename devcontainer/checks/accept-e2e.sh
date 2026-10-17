@@ -50,10 +50,10 @@ PORT="$api_port" DATABASE_URL="postgres://postgres@$db_host:$db_port/app?sslmode
 pids+=($!)
 wait_for "$api_port" api
 echo "== build the web app"
-(cd "$web" && npm ci --no-audit --no-fund && npm run build)
+(cd "$web" && npm ci --no-audit --no-fund && node_modules/.bin/tsc --noEmit -p tsconfig.json && node_modules/.bin/vite build)
 echo "== start the web app"
 (cd "$web" && API_URL="http://127.0.0.1:$api_port" exec node_modules/.bin/vite preview --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
 pids+=($!)
 wait_for "$app_port" app
 echo "== playwright"
-(cd "$web" && E2E_URL="http://127.0.0.1:$app_port" npx playwright test)
+(cd "$web" && E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test)

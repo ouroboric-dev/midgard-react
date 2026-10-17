@@ -11,10 +11,10 @@ func TestContractChecksTheTypesAreWhatTheContractSaysAndListsChanges(t *testing.
 	work(t, dir, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\ninfo: {}\n"})
 	mk := func(generates string) string {
 		bin := stubs(t, "vacuum", "oasdiff")
-		stub(t, bin, "npx", `echo "npx $*" >> "$(dirname "$0")/calls.log"
+		webTools(t, bin, map[string]string{"openapi-typescript": `echo "openapi-typescript $*" >> "` + bin + `/calls.log"
 out=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done
-printf '%s\n' '`+generates+`' > "$out"
-`)
+printf '%s\n' '` + generates + `' > "$out"
+`})
 		return bin
 	}
 	bin := mk("types")
@@ -36,14 +36,32 @@ printf '%s\n' '`+generates+`' > "$out"
 	}
 }
 
+func TestContractInstallsCleanAndGeneratesWithTheInstalledTool(t *testing.T) {
+	dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "contracts/api.openapi.yaml": "openapi: 3.1.0\n", "src/api/schema.d.ts": "types\n"})
+	work(t, dir, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\ninfo: {}\n"})
+	bin := stubs(t, "vacuum", "oasdiff")
+	webTools(t, bin, map[string]string{"openapi-typescript": `out=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done
+printf '%s\n' 'other types' > "$out"
+`})
+	// The planted generator writes exactly what the committed types hold, so a check that trusted it would pass.
+	tamper(t, dir, "openapi-typescript")
+	put(t, dir, map[string]string{"node_modules/.bin/openapi-typescript": "#!/bin/sh\nout=\"\"; while [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=\"$2\"; shift; done\nprintf 'types\\n' > \"$out\"\n"})
+	if code, out := script(t, dir, bin, "web-contract.sh", "STUB_OASDIFF_OUT=[]"); code == 0 || !strings.Contains(out, "gen:api") {
+		t.Errorf("a planted generator was trusted: exit %d\n%s", code, out)
+	}
+}
+
 func TestSecurityStopsOnAVulnerabilityFromEitherSource(t *testing.T) {
-	dir := leaf(t, map[string]string{"node_modules/.keep": ""})
-	bin := stubs(t, "npm", "osv-scanner")
-	if code, out := script(t, dir, bin, "web-security.sh"); code != 0 || calls(bin) != "npm audit --audit-level=high\nosv-scanner scan source -L package-lock.json\n" {
+	dir := leaf(t, map[string]string{"package.json": "{}"})
+	bin := stubs(t, "osv-scanner")
+	webTools(t, bin, nil)
+	if code, out := script(t, dir, bin, "web-security.sh"); code != 0 || calls(bin) != "npm ci --no-audit --no-fund\nnpm audit --audit-level=high\nosv-scanner scan source -L package-lock.json\n" {
 		t.Fatalf("exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 	for _, env := range []string{"STUB_NPM_EXIT=1", "STUB_OSV_SCANNER_EXIT=1"} {
-		if code, _ := script(t, dir, stubs(t, "npm", "osv-scanner"), "web-security.sh", env); code == 0 {
+		bin := stubs(t, "osv-scanner")
+		webTools(t, bin, nil)
+		if code, _ := script(t, dir, bin, "web-security.sh", env); code == 0 {
 			t.Errorf("%s passed", env)
 		}
 	}
