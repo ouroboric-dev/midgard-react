@@ -4,7 +4,7 @@
 set -euo pipefail
 "$(dirname "$0")/web-protected.sh"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
-npm ci --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 echo "== npm audit"
 npm audit --audit-level=high
 echo "== OSV"

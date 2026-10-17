@@ -6,7 +6,7 @@ set -euo pipefail
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there
 # runs. The tools are called by path, not through the scripts of package.json.
 echo "== npm ci"
-npm ci --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 echo "== eslint"
 node_modules/.bin/eslint .
 echo "== tsc"

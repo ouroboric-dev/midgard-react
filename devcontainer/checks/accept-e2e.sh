@@ -66,7 +66,7 @@ else
   api_port=""
 fi
 echo "== build the web app"
-(cd "$web" && npm ci --no-audit --no-fund && node_modules/.bin/tsc --noEmit -p tsconfig.json && node_modules/.bin/vite build)
+(cd "$web" && npm ci --ignore-scripts --no-audit --no-fund && node_modules/.bin/tsc --noEmit -p tsconfig.json && node_modules/.bin/vite build)
 echo "== start the web app"
 (cd "$web" && exec env ${api_port:+"API_URL=http://127.0.0.1:$api_port"} node_modules/.bin/vite preview --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
 pids+=($!)

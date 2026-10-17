@@ -8,7 +8,7 @@ c=contracts/api.openapi.yaml
 [ -f "$c" ] || { echo "contract: this leaf has no $c"; exit 1; }
 "$(dirname "$0")/web-protected.sh"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
-npm ci --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 echo "== openapi lint"
 vacuum lint --no-style --details --fail-severity error "$c"
 echo "== generated types"

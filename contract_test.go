@@ -55,7 +55,7 @@ func TestSecurityStopsOnAVulnerabilityFromEitherSource(t *testing.T) {
 	dir := repo(t, map[string]string{"package.json": "{}"})
 	bin := stubs(t, "osv-scanner")
 	webTools(t, bin, nil)
-	if code, out := script(t, dir, bin, "web-security.sh"); code != 0 || calls(bin) != "npm ci --no-audit --no-fund\nnpm audit --audit-level=high\nosv-scanner scan source -L package-lock.json\n" {
+	if code, out := script(t, dir, bin, "web-security.sh"); code != 0 || calls(bin) != "npm ci --ignore-scripts --no-audit --no-fund\nnpm audit --audit-level=high\nosv-scanner scan source -L package-lock.json\n" {
 		t.Fatalf("exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 	for _, env := range []string{"STUB_NPM_EXIT=1", "STUB_OSV_SCANNER_EXIT=1"} {

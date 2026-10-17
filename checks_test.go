@@ -173,7 +173,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	if code, out := script(t, repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"}), bin, "web-static.sh"); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	want := "npm ci --no-audit --no-fund\neslint .\ntsc --noEmit -p tsconfig.json\ntsc --noEmit -p tsconfig.json\nvite build\n"
+	want := "npm ci --ignore-scripts --no-audit --no-fund\neslint .\ntsc --noEmit -p tsconfig.json\ntsc --noEmit -p tsconfig.json\nvite build\n"
 	if calls(bin) != want {
 		t.Errorf("calls = %q, want %q: install, lint, type-check, build", calls(bin), want)
 	}
@@ -184,7 +184,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"})
 	tamper(t, dir, "eslint", "tsc", "vite")
 	code, out := script(t, dir, bin, "web-static.sh", "STUB_ESLINT_EXIT=1")
-	if code == 0 || strings.Contains(out, "TAMPERED") || !strings.HasPrefix(calls(bin), "npm ci --no-audit --no-fund\n") {
+	if code == 0 || strings.Contains(out, "TAMPERED") || !strings.HasPrefix(calls(bin), "npm ci --ignore-scripts --no-audit --no-fund\n") {
 		t.Errorf("a planted node_modules: exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "node_modules/planted")); err == nil {
@@ -272,7 +272,7 @@ func TestUnitInstallsCleanAndRunsVitestByPath(t *testing.T) {
 	}
 	bin = t.TempDir()
 	webTools(t, bin, map[string]string{"vitest": ""})
-	if code, _ := script(t, repo(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --no-audit --no-fund\nvitest run\n" {
+	if code, _ := script(t, repo(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run\n" {
 		t.Errorf("calls = %q", calls(bin))
 	}
 }
@@ -330,7 +330,7 @@ exit "${STUB_PARENT_EXIT:-0}"
 	if st := git(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("the check left the leaf changed:\n%s", st)
 	}
-	if got := calls(bin); got != "npm ci --no-audit --no-fund\nvitest run src/lib/greet.test.ts\n" {
+	if got := calls(bin); got != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run src/lib/greet.test.ts\n" {
 		t.Errorf("vitest was run as %q, want only the new test file", got)
 	}
 }
@@ -419,6 +419,31 @@ func TestEveryWebRungRefusesAChangeToTheConfiguration(t *testing.T) {
 		put(t, dir, map[string]string{"vitest.config.ts": "x\n", ".npmrc": "script-shell=./sh\n"})
 		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "vitest.config.ts") || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
 			t.Errorf("%s with files not committed: exit %d\n%s", rung, code, out)
+		}
+	}
+}
+
+// A package may run a script when npm installs it (preinstall, install, postinstall, prepare), and a package
+// the agent adds can be its own. Every install of the ladder and of the acceptance run leaves them out; the
+// tools the ladder needs ship their binaries in packages and do not need them.
+func TestEveryNpmInstallOfTheChecksIgnoresScripts(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("devcontainer", "checks", "*.sh"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no scripts: %v", err)
+	}
+	files = append(files, filepath.Join("templates", "web", "init.sh"))
+	for _, f := range files {
+		body, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if l := strings.TrimSpace(line); strings.HasPrefix(l, "#") || strings.HasPrefix(l, "echo ") {
+				continue
+			}
+			if (strings.Contains(line, "npm ci") || strings.Contains(line, "npm install")) && !strings.Contains(line, "--ignore-scripts") {
+				t.Errorf("%s:%d installs packages without --ignore-scripts: %s", f, i+1, line)
+			}
 		}
 	}
 }

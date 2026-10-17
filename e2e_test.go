@@ -71,7 +71,7 @@ func TestE2EStartsAMockAndTheAppRunsPlaywrightAndStopsThem(t *testing.T) {
 	dir := leafWith(bin, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\n"})
 	code, out := script(t, dir, bin, "web-e2e.sh", env...)
 	got := calls(bin)
-	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(mockPort) + " contracts/api.openapi.yaml", "npm ci --no-audit --no-fund", "vite build",
+	for _, want := range []string{"prism mock --host 127.0.0.1 --port " + strconv.Itoa(mockPort) + " contracts/api.openapi.yaml", "npm ci --ignore-scripts --no-audit --no-fund", "vite build",
 		"app API_URL=http://127.0.0.1:" + strconv.Itoa(mockPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
 		if !strings.Contains(got, want) {
 			t.Errorf("calls lack %q:\n%s", want, got)
@@ -141,7 +141,7 @@ chmod +x "$out"
 	bin := mk()
 	code, out := script(t, project(bin), bin, "accept-e2e.sh", env...)
 	got := calls(bin)
-	for _, want := range []string{"oasdiff breaking repos/web/contracts/api.openapi.yaml repos/api/openapi.yaml --fail-on ERR", "api PORT=" + strconv.Itoa(apiPort) + " DATABASE_URL=postgres://postgres@127.0.0.1:", "npm ci --no-audit --no-fund", "npm ci --no-audit --no-fund", "vite build",
+	for _, want := range []string{"oasdiff breaking repos/web/contracts/api.openapi.yaml repos/api/openapi.yaml --fail-on ERR", "api PORT=" + strconv.Itoa(apiPort) + " DATABASE_URL=postgres://postgres@127.0.0.1:", "npm ci --ignore-scripts --no-audit --no-fund", "npm ci --ignore-scripts --no-audit --no-fund", "vite build",
 		"app API_URL=http://127.0.0.1:" + strconv.Itoa(apiPort), "playwright E2E_URL=http://127.0.0.1:" + strconv.Itoa(appPort)} {
 		if !strings.Contains(got, want) {
 			t.Errorf("calls lack %q:\n%s", want, got)
