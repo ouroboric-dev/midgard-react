@@ -1,3 +1,3 @@
-module github.com/ouroboric-dev/realm-web
+module github.com/ouroboric-dev/midgard-react
 
 go 1.26

@@ -1,8 +1,9 @@
-# realm-web
+# midgard-react
 
-The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for web frontends.
+The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for
+web frontends.
 
-Part of [Yggdrasil](https://github.com/ouroboric-dev/yggdrasil), the software factory by
+Part of [Yggdrasil](https://github.com/ouroboric-dev/yggdrasil), the agentic factory by
 [Ouroboric](https://github.com/ouroboric-dev/ouroboric). Work on it from the Yggdrasil umbrella,
 which holds every component as a submodule and builds them together through `go.work`.
 
