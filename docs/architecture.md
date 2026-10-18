@@ -61,6 +61,13 @@ and runs `gofmt`, `go vet`, `go test -race -v` as the non-root user `node`, and 
 `YGG_REQUIRE_TEMPLATES`, so the template tests fail instead of skipping when the npm registry cannot be
 reached. The pr-bot cannot change the workflow; the founder pushes changes to it.
 
+The web template carries its own CI (`templates/web/.github/workflows/ci.yml`), so a product's first commit
+has the required check `test` too. It runs in the same Node image as the `web` stage of the Containerfile
+(no `apt-get` step, no service, no Playwright) and runs `npm ci --ignore-scripts`, `lint`, `typecheck`,
+`test` and `build`. `TestTemplateCI` keeps it in step with the Containerfile and `package.json`. Every rung
+of the web ladder refuses a task's change under `.github/` (`web-protected.sh`), so only the product's people
+change the workflow. Its lint and typecheck use the leaf's own tool configs, which the ladder ignores.
+
 ## Depends on
 
 - Gungnir's schemas.

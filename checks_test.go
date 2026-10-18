@@ -720,3 +720,40 @@ func TestRealRungsIgnoreAnyConfigTheLeafHas(t *testing.T) {
 		})
 	}
 }
+
+// Every rung of the web ladder refuses a task that adds or changes the leaf's own CI, before it installs or
+// runs anything: the workflow is the product's, and only the product's people change it.
+func TestEveryRungRefusesAWorkflowChange(t *testing.T) {
+	const wf = ".github/workflows/ci.yml"
+	base := map[string]string{".gitignore": "node_modules/\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
+		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
+	withWorkflow := map[string]string{wf: "name: ci\n"}
+	for k, v := range base {
+		withWorkflow[k] = v
+	}
+	tools := map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""}
+	for _, rung := range []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-security.sh", "web-e2e.sh"} {
+		for name, c := range map[string]struct{ start, files map[string]string }{
+			"a workflow added":   {base, map[string]string{wf: "name: ci\n"}},
+			"a workflow changed": {withWorkflow, map[string]string{wf: "name: other\n"}},
+			"another workflow":   {base, map[string]string{".github/workflows/deploy.yml": "name: deploy\n"}},
+		} {
+			dir := repo(t, c.start)
+			work(t, dir, c.files)
+			bin := t.TempDir()
+			webTools(t, bin, tools)
+			if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".github/") || calls(bin) != "" {
+				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
+			}
+		}
+		// Written but not committed counts too.
+		dir := repo(t, base)
+		git(t, dir, "switch", "-q", "-c", "work")
+		put(t, dir, map[string]string{wf: "name: ci\n"})
+		bin := t.TempDir()
+		webTools(t, bin, tools)
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, wf) || calls(bin) != "" {
+			t.Errorf("%s with a workflow not committed: exit %d\n%s", rung, code, out)
+		}
+	}
+}

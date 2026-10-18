@@ -1,0 +1,32 @@
+# CI of this product: the required check "test". It runs the stack's own commands on the stack's own image
+# (the Node image of the factory's dev container), so a change that passes the factory's checks passes here.
+# Only the product's people change this file, never an agent in a factory run: every rung of the ladder
+# refuses a change to .github/. There is no Playwright here; the e2e specs run in the factory's ladder.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: >-
+        docker.io/library/node@sha256:efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: lint
+        run: npm run lint
+      - name: typecheck
+        run: npm run typecheck
+      - name: test
+        run: npm test
+      - name: build
+        run: npm run build
