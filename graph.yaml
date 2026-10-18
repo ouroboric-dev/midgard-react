@@ -6,20 +6,84 @@
 name: midgard-react
 version: 0.1.0
 nodes:
-  - { id: design, kind: agent, role: planner, prompt: prompts/design.md, scratch: true, max_turns: 30, timeout: 20m }
-  - { id: design-gate, kind: gate, gate: design }
-  - { id: design-docs, kind: publish, from: design, to: docs }
-  - { id: spec, kind: agent, role: planner, prompt: prompts/spec.md, scratch: true, inputs: [docs/1-product], max_turns: 40, timeout: 30m }
-  - { id: conformance, kind: agent, role: reviewer, prompt: prompts/conformance.md, scratch: true, reviews: spec, inputs: [docs/1-product], max_turns: 15, timeout: 10m }
-  - { id: spec-gate, kind: gate, gate: spec, reruns: spec, deviation_from: conformance }
-  - { id: spec-docs, kind: publish, from: spec, to: docs }
-  - { id: plan, kind: agent, role: planner, prompt: prompts/plan.md, scratch: true, inputs: [docs/1-product, docs/2-engineering/specs, docs/leaves.yaml], max_turns: 40, timeout: 30m }
-  - { id: reuse-review, kind: agent, role: reviewer, prompt: prompts/reuse-review.md, scratch: true, reviews: plan, inputs: [docs/2-engineering/specs, docs/leaves.yaml], skills: [ponytail-review], max_turns: 15, timeout: 10m }
-  - { id: plan-docs, kind: publish, from: plan, to: docs }
-  - { id: reuse-docs, kind: publish, from: reuse-review, to: docs }
-  - { id: ready, kind: tasks, from: docs/2-engineering/plans/*/tasks.md, leaves: docs/leaves.yaml, back_to: plan }
-  - { id: leaves, kind: init, from: docs/leaves.yaml }
-  - { id: plan-gate, kind: gate, gate: plan, reruns: plan }
+  - id: design
+    kind: agent
+    role: planner
+    prompt: prompts/design.md
+    scratch: true
+    max_turns: 30
+    timeout: 20m
+  - id: design-gate
+    kind: gate
+    gate: design
+  - id: design-docs
+    kind: publish
+    from: design
+    to: docs
+  - id: spec
+    kind: agent
+    role: planner
+    prompt: prompts/spec.md
+    scratch: true
+    inputs: [docs/1-product]
+    max_turns: 40
+    timeout: 30m
+  - id: conformance
+    kind: agent
+    role: reviewer
+    prompt: prompts/conformance.md
+    scratch: true
+    reviews: spec
+    inputs: [docs/1-product]
+    max_turns: 15
+    timeout: 10m
+  - id: spec-gate
+    kind: gate
+    gate: spec
+    reruns: spec
+    deviation_from: conformance
+  - id: spec-docs
+    kind: publish
+    from: spec
+    to: docs
+  - id: plan
+    kind: agent
+    role: planner
+    prompt: prompts/plan.md
+    scratch: true
+    inputs: [docs/1-product, docs/2-engineering/specs, docs/leaves.yaml]
+    max_turns: 40
+    timeout: 30m
+  - id: reuse-review
+    kind: agent
+    role: reviewer
+    prompt: prompts/reuse-review.md
+    scratch: true
+    reviews: plan
+    inputs: [docs/2-engineering/specs, docs/leaves.yaml]
+    skills: [ponytail-review]
+    max_turns: 15
+    timeout: 10m
+  - id: plan-docs
+    kind: publish
+    from: plan
+    to: docs
+  - id: reuse-docs
+    kind: publish
+    from: reuse-review
+    to: docs
+  - id: ready
+    kind: tasks
+    from: docs/2-engineering/plans/*/tasks.md
+    leaves: docs/leaves.yaml
+    back_to: plan
+  - id: leaves
+    kind: init
+    from: docs/leaves.yaml
+  - id: plan-gate
+    kind: gate
+    gate: plan
+    reruns: plan
   - id: tasks
     kind: foreach
     over: tasks
@@ -32,11 +96,38 @@ nodes:
         max_turns: 60
         timeout: 30m
         reviewers:
-          - { id: spec-compliance, role: reviewer, prompt: prompts/reviewer-spec.md, max_turns: 20, timeout: 10m }
-          - { id: simplicity, role: reviewer, prompt: prompts/reviewer-simplicity.md, skills: [ponytail-review], max_turns: 20, timeout: 10m }
-          - { id: quality, role: reviewer, prompt: prompts/reviewer-quality.md, max_turns: 20, timeout: 10m }
-      - { id: feature-gate, kind: gate, gate: feature }
-      - { id: merge-gate, kind: gate, gate: merge }
-      - { id: land, kind: merge, realm: leaf, back_to: implement }
-      - { id: pointer-gate, kind: gate, gate: pointer }
-      - { id: move, kind: pointer, realm: leaf, acceptance: [accept], timeout: 25m, back_to: implement }
+          - id: spec-compliance
+            role: reviewer
+            prompt: prompts/reviewer-spec.md
+            max_turns: 20
+            timeout: 10m
+          - id: simplicity
+            role: reviewer
+            prompt: prompts/reviewer-simplicity.md
+            skills: [ponytail-review]
+            max_turns: 20
+            timeout: 10m
+          - id: quality
+            role: reviewer
+            prompt: prompts/reviewer-quality.md
+            max_turns: 20
+            timeout: 10m
+      - id: feature-gate
+        kind: gate
+        gate: feature
+      - id: merge-gate
+        kind: gate
+        gate: merge
+      - id: land
+        kind: merge
+        realm: leaf
+        back_to: implement
+      - id: pointer-gate
+        kind: gate
+        gate: pointer
+      - id: move
+        kind: pointer
+        realm: leaf
+        acceptance: [accept]
+        timeout: 25m
+        back_to: implement
