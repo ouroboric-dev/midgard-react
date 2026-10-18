@@ -5,7 +5,7 @@
 # (4010) and YGG_APP_PORT (4173); it refuses to start if either is taken. Run in the leaf's top folder. Every
 # server it starts is stopped.
 set -euo pipefail
-# shellcheck source=web-configs.sh
+# shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
 mock_port="${YGG_MOCK_PORT:-4010}" app_port="${YGG_APP_PORT:-4173}" wait_s="${YGG_E2E_WAIT:-60}"
 log="$(mktemp -d)"

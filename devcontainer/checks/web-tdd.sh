@@ -7,7 +7,7 @@
 # with a note, and the reviewers look at it. Generated and type-only files are not code that needs a test.
 # Run in the leaf's top folder, on the run branch; main is where the task started from.
 set -euo pipefail
-# shellcheck source=web-configs.sh
+# shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
 base="$(git merge-base HEAD main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
 "$(dirname "$0")/web-protected.sh"

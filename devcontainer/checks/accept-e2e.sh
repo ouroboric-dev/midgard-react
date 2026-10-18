@@ -7,7 +7,7 @@
 # for it): then the oasdiff, build and start steps are skipped, and the web app runs its specs against a mock
 # of its own copy of the contract (Prism), or against no API when it has no copy. Run in the top folder of the snapshot.
 set -euo pipefail
-# shellcheck source=web-configs.sh
+# shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
 api="${YGG_API_DIR:-repos/api}" web="${YGG_WEB_DIR:-repos/web}" wait_s="${YGG_E2E_WAIT:-60}"
 api_port="${YGG_API_PORT:-8080}" app_port="${YGG_APP_PORT:-4173}"
