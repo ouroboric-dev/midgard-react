@@ -404,7 +404,7 @@ func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 			work(t, dir, files)
 			bin := t.TempDir()
 			webTools(t, bin, tools)
-			code, out := script(t, dir, bin, rung)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
 			if code == 0 || !strings.Contains(out, "protected") || calls(bin) != "" {
 				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
 			}
@@ -415,13 +415,13 @@ func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 		put(t, dir, map[string]string{".npmrc": "script-shell=./sh\n"})
 		bin := t.TempDir()
 		webTools(t, bin, tools)
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
+		if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
 			t.Errorf("%s with an .npmrc not committed: exit %d\n%s", rung, code, out)
 		}
 		dir = repo(t, start)
 		git(t, dir, "switch", "-q", "-c", "work")
 		put(t, dir, map[string]string{".gitignore": "node_modules/\n.npmrc\n", ".npmrc": "script-shell=./sh\n"})
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
+		if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
 			t.Errorf("%s with an ignored .npmrc: exit %d\n%s", rung, code, out)
 		}
 	}
@@ -742,7 +742,7 @@ func TestEveryRungRefusesAWorkflowChange(t *testing.T) {
 			work(t, dir, c.files)
 			bin := t.TempDir()
 			webTools(t, bin, tools)
-			if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".github/") || calls(bin) != "" {
+			if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, ".github/") || calls(bin) != "" {
 				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
 			}
 		}
@@ -752,7 +752,7 @@ func TestEveryRungRefusesAWorkflowChange(t *testing.T) {
 		put(t, dir, map[string]string{wf: "name: ci\n"})
 		bin := t.TempDir()
 		webTools(t, bin, tools)
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, wf) || calls(bin) != "" {
+		if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, wf) || calls(bin) != "" {
 			t.Errorf("%s with a workflow not committed: exit %d\n%s", rung, code, out)
 		}
 	}
