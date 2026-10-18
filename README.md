@@ -14,6 +14,8 @@ go test ./...
 go vet ./...
 ```
 
+The required check `test` runs `gofmt`, `go vet`, `go test -race` as a non-root user, and `govulncheck`.
+
 ## What it holds
 
 The lead realm of a web product for the factory: the graph from a brief to a merged, accepted product, the
