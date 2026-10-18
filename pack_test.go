@@ -47,7 +47,7 @@ func TestThePackLoadsAsTheLeadRealmWithTwoStacksFromOneContext(t *testing.T) {
 		!regexp.MustCompile(`^localhost/ygg-stack-midgard-react-acceptance:[0-9a-f]{12}$`).MatchString(acc) || web == acc {
 		t.Errorf("stacks %q and %q; the leaf's and the acceptance sandbox's are two images of one context", web, acc)
 	}
-	want := []string{"static", "unit", "tdd", "contract", "security", "e2e"}
+	want := []string{"static", "unit", "tdd", "contract", "deps", "security", "e2e"}
 	if strings.Join(p.Leaf.Checks, ",") != strings.Join(want, ",") {
 		t.Errorf("the ladder is %v, want %v: cheap rungs first, the browser last", p.Leaf.Checks, want)
 	}
@@ -63,8 +63,8 @@ func TestThePackLoadsAsTheLeadRealmWithTwoStacksFromOneContext(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Join("devcontainer", "checks"))
 	for _, e := range entries {
 		// docs.sh, web-protected.sh and web-configs.sh (sourced) are used by the web rungs; config/ holds the baked
-		// tool configs web-configs.sh installs.
-		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" || e.Name() == "web-configs.sh" || e.Name() == "config"
+		// tool configs web-configs.sh installs and the policy web-deps.sh reads, and lib/ holds the checker it runs.
+		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" || e.Name() == "web-configs.sh" || e.Name() == "config" || e.Name() == "lib"
 		for _, argv := range p.Checks {
 			used = used || filepath.Base(argv[0]) == e.Name()
 		}

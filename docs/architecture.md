@@ -37,8 +37,9 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - `prompts/`: planner, conformance, reuse-review, implementer and reviewer prompts. A planner prompt tells
   where its documents go; a test checks the examples in them against the schemas Odin reads.
 - `devcontainer/Containerfile` and `devcontainer/checks/`: the stack and the ladder's scripts. `web-static`,
-  `web-unit`, `web-tdd` (new tests fail on the commit the task started from), `web-contract`, `web-security`
-  and `web-e2e` (Playwright against the built app and a Prism mock of the contract) make the leaf's ladder.
+  `web-unit`, `web-tdd` (new tests fail on the commit the task started from), `web-contract`, `web-deps` (the
+  dependency policy of `config/deps-policy.json`: pinned minor lines, minimum patched versions, then the
+  audits the policy names), `web-security` and `web-e2e` (Playwright against the built app and a Prism mock of the contract) make the leaf's ladder.
   `accept-e2e` is the acceptance run: on a snapshot of the project it checks the API still keeps what the
   web app's copy of the contract promises (the copy may lag; the API may not break it), builds and starts
   the API against Postgres, and runs the Playwright specs.
