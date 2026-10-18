@@ -176,3 +176,68 @@ func TestTheBakedDepsPolicyIsValidAndTheRungReadsItFromBesideItself(t *testing.T
 		t.Error("web-deps.sh does not read the policy from beside itself, or does not run web-protected.sh first")
 	}
 }
+
+// The lock file is the agent's text, so the floor is also read from what npm ci installed, and a lock file the
+// checker cannot read in full is refused (fix round 1, three ways past a check that read only package-lock.json).
+
+func TestDepsReadsTheInstalledVersionNotOnlyTheLock(t *testing.T) {
+	// the lock says 8.3.2, but its tarball is the old one: npm ci installs vite 7.0.0
+	dir := depsLeaf(t, `"devDependencies":{"vite":"8.3.2"}`, map[string]string{"node_modules/vite": "8.3.2"})
+	bin := stubs(t, "osv-scanner")
+	stub(t, bin, "npm", "echo \"npm $*\" >> \""+bin+"/calls.log\"\nif [ \"$1\" = ci ]; then\nrm -rf node_modules\nmkdir -p node_modules/vite node_modules/a/node_modules/vite\n"+
+		"echo '{\"name\":\"vite\",\"version\":\"7.0.0\"}' > node_modules/vite/package.json\necho '{\"name\":\"vite\",\"version\":\"8.4.0\"}' > node_modules/a/node_modules/vite/package.json\nfi\n")
+	code, out := script(t, dir, bin, "web-deps.sh")
+	if code == 0 || !strings.Contains(out, "node_modules/vite 7.0.0 is installed, below the minimum 8.3.2") {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	if strings.Contains(calls(bin), "npm audit") || strings.Contains(calls(bin), "osv-scanner") {
+		t.Errorf("an audit ran after the installed check failed: %s", calls(bin))
+	}
+}
+
+func TestDepsRefusesALockFileTheCheckerCannotReadInFull(t *testing.T) {
+	v1 := `{"name":"t","lockfileVersion":1,"dependencies":{"vite":{"version":"7.0.0"}}}`
+	for name, c := range map[string]struct{ lock, want string }{
+		"lockfileVersion 1": {v1, "needs lockfileVersion 2 or 3"},
+		"no packages map":   {`{"name":"t","lockfileVersion":3}`, "needs lockfileVersion 2 or 3"},
+		"null":              {`null`, "not a JSON object"},
+		"a list":            {`[]`, "not a JSON object"},
+		"not json":          {`lock: 1`, "not JSON"},
+	} {
+		dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "package.json": pkgJSON(`"devDependencies":{"vite":"7.0.0"}`), "package-lock.json": c.lock})
+		bin := stubs(t, "osv-scanner")
+		webTools(t, bin, nil)
+		code, out := script(t, dir, bin, "web-deps.sh")
+		if code == 0 || !strings.Contains(out, c.want) || strings.Contains(out, "no package-lock.json") || calls(bin) != "" {
+			t.Errorf("%s: exit %d, calls %q, want %q\n%s", name, code, calls(bin), c.want, out)
+		}
+	}
+}
+
+func TestDepsRefusesAShrinkwrap(t *testing.T) {
+	// npm ci reads npm-shrinkwrap.json in place of package-lock.json, and nothing protects it
+	dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "package.json": pkgJSON(`"devDependencies":{"vite":"8.3.2"}`),
+		"package-lock.json": lock(t, map[string]string{"node_modules/vite": "8.3.2"}), "npm-shrinkwrap.json": lock(t, map[string]string{"node_modules/vite": "7.0.0"})})
+	bin := stubs(t, "osv-scanner")
+	webTools(t, bin, nil)
+	code, out := script(t, dir, bin, "web-deps.sh")
+	if code == 0 || !strings.Contains(out, "npm-shrinkwrap.json: not allowed") || calls(bin) != "" {
+		t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+	}
+}
+
+func TestDepsFailsWhenTheAuditListCannotBeRead(t *testing.T) {
+	dir := depsLeaf(t, `"dependencies":{"react":"19.3.0"}`, map[string]string{"node_modules/react": "19.3.0"})
+	real, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node")
+	}
+	bin := stubs(t, "osv-scanner")
+	webTools(t, bin, nil)
+	// a node that fails for the audit subcommand only
+	stub(t, bin, "node", "case \" $* \" in *\" audit \"*) exit 3;; esac\nexec "+real+" \"$@\"\n")
+	code, out := script(t, dir, bin, "web-deps.sh")
+	if code == 0 || strings.Contains(calls(bin), "osv-scanner") || strings.Contains(calls(bin), "npm audit") {
+		t.Errorf("exit %d, calls %q: a failing audit list let the rung pass\n%s", code, calls(bin), out)
+	}
+}

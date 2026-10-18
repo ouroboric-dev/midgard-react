@@ -13,7 +13,10 @@ echo "== dependency policy"
 node "$here/lib/webdeps.mjs" check "$policy"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
 npm ci --ignore-scripts --no-audit --no-fund
-for tool in $(node "$here/lib/webdeps.mjs" audit "$policy"); do
+# The lock file is the agent's text: check what was installed, too, before any audit.
+node "$here/lib/webdeps.mjs" installed "$policy"
+tools="$(node "$here/lib/webdeps.mjs" audit "$policy")"
+for tool in $tools; do
   case "$tool" in
     npm-audit)
       echo "== npm audit"
@@ -22,6 +25,10 @@ for tool in $(node "$here/lib/webdeps.mjs" audit "$policy"); do
     osv)
       echo "== OSV"
       osv-scanner scan source -L package-lock.json
+      ;;
+    *)
+      echo "deps: unknown audit $tool"
+      exit 1
       ;;
   esac
 done
