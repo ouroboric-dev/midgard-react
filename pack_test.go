@@ -134,7 +134,7 @@ func TestEveryTaskRunsTheLoopWithThreeReviewersThenTheGatesAndTheMoveWithAccepta
 	for _, n := range body {
 		ids = append(ids, n.ID)
 	}
-	if strings.Join(ids, ",") != "implement,feature-gate,merge-gate,land,pointer-gate,move" {
+	if strings.Join(ids, ",") != "implement,feature-gate,merge-gate,land,pointer-gate,contract-gate,move" {
 		t.Fatalf("the task shape = %v", ids)
 	}
 	impl := body[0]
@@ -148,7 +148,7 @@ func TestEveryTaskRunsTheLoopWithThreeReviewersThenTheGatesAndTheMoveWithAccepta
 	if !slices.Contains(impl.Reviewers[1].Skills, "ponytail-review") {
 		t.Error("the simplicity reviewer does not load the Ponytail skill")
 	}
-	land, move := body[3], body[5]
+	land, move := body[3], body[6]
 	if land.BackTo != "implement" || move.BackTo != "implement" || !slices.Equal(move.Acceptance, []string{"accept"}) {
 		t.Errorf("land %+v, move %+v: a refusal goes back to the implementer, and the move runs the acceptance check", land, move)
 	}
@@ -189,5 +189,44 @@ func TestEveryPromptIsUsedAndEveryPromptTheGraphNamesIsThere(t *testing.T) {
 		if !slices.Contains([]string{"planner", "implementer", "reviewer"}, r) {
 			t.Errorf("the graph uses the role %q, which an operator's factory.yaml is not told to define", r)
 		}
+	}
+}
+
+// Spec §3.4: a move that changes a contract is the pointer-contract approval point. The gate judges the move
+// that follows it, so it comes after the leaf has landed and before the move. The move also ships the routing
+// indexes (spec §8): Odin builds REPOS.md's wiring block and .ygg/impact.json, and the shrink guard reads them.
+func TestTheContractGateComesBeforeTheMoveAndTheMoveShipsTheRoutingIndexes(t *testing.T) {
+	body := loadGraph(t).Nodes[len(loadGraph(t).Nodes)-1].Body
+	by := map[string]int{}
+	for i, n := range body {
+		by[n.ID] = i
+	}
+	gate, move := body[by["contract-gate"]], body[by["move"]]
+	if gate.Kind != schema.KindGate || gate.Gate != gungnir.GatePointerContract || by["contract-gate"] != by["move"]-1 || by["contract-gate"] < by["land"] {
+		t.Errorf("contract-gate = %+v at %d; want the pointer-contract gate right before the move and after the land", gate, by["contract-gate"])
+	}
+	if !slices.Equal(move.Generated, []string{"REPOS.md", ".ygg/impact.json"}) {
+		t.Errorf("the move generates %v; it must list both routing indexes so Odin builds them and the shrink guard reads them", move.Generated)
+	}
+	if loadPack(t).Routing != nil {
+		t.Error("the pack sets a routing threshold; a project needs its bench first (docs/architecture.md)")
+	}
+}
+
+// Routing finds a contract by its name (Odin: a file name that ends in openapi.yaml). The web template's copy
+// of the API contract must be named so, or the impact index never sees it.
+func TestTheTemplatesContractIsNamedSoRoutingFindsIt(t *testing.T) {
+	var found []string
+	err := filepath.WalkDir("templates/web", func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.Contains(d.Name(), "openapi") {
+			found = append(found, p)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || !strings.HasSuffix(found[0], "openapi.yaml") {
+		t.Errorf("OpenAPI files in the web template = %v; want one, named *openapi.yaml", found)
 	}
 }

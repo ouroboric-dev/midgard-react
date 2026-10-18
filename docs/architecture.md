@@ -33,7 +33,7 @@ change proposal `2026-10-17-realm-leaf-naming`).
   against the design and the spec gate stops on a deviation; a reuse review reads the plan; the plan is read
   into tasks and the leaves are created from their realms' templates. Then, for every task: the implementer
   in a loop with the check ladder and three reviewers (spec compliance, simplicity, quality), the merge
-  gate, and the pointer move with the acceptance run.
+  gate, the `pointer-contract` gate and the pointer move with the acceptance run.
 - `prompts/`: planner, conformance, reuse-review, implementer and reviewer prompts. A planner prompt tells
   where its documents go; a test checks the examples in them against the schemas Odin reads.
 - `devcontainer/Containerfile` and `devcontainer/checks/`: the stack and the ladder's scripts. `web-static`,
@@ -45,6 +45,25 @@ change proposal `2026-10-17-realm-leaf-naming`).
   the API against Postgres, and runs the Playwright specs.
 - `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
   and Query, a typed client for the contract, a tested component and a Playwright spec.
+
+## Routing
+
+Odin keeps two indexes of a project (spec §8). The wiring block of `REPOS.md` says who consumes, requires or
+pins what. `.ygg/impact.json` says what a change to a leaf, a contract or a package reaches. Odin builds both
+from the umbrella, the packs, `go.mod`, `package.json`, the lockfiles, Go imports and OpenAPI files. It calls no
+model. Every edge is `extracted` (read from a file) or `inferred` (a guess).
+
+- The `move` node lists both files in `generated`. At each move Odin rebuilds them and logs
+  `routing_index_built`. The shrink guard refuses an index that kept under half of its edges.
+- The `contract-gate` node judges the move after it. A move that changes an OpenAPI file is judged by
+  `extracted` edges of the shipped impact index, or by `oasdiff`. If the only evidence is an `inferred` edge,
+  the verdict is `escalate` and a person decides in every mode. The ledger records `pointer_contract_checked`.
+- A contract file is a file whose name ends in `openapi.yaml` or `openapi.yml`. The web template keeps its copy
+  of the API contract in `contracts/api.openapi.yaml`. A byte-identical copy is an `extracted` edge. A copy
+  with the same title and other bytes is `inferred`. Keep the copy current, or the gate escalates.
+- The pack sets no `routing` block. A project that wants its indexes measured adds `.ygg/routing-bench.yaml` to
+  its umbrella (questions with known answers, scored right first with no model) and a `routing:` block with a
+  `threshold` to the pack. Odin then ships an index only at or above the threshold.
 
 ## Tests
 
