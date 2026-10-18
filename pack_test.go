@@ -62,7 +62,9 @@ func TestThePackLoadsAsTheLeadRealmWithTwoStacksFromOneContext(t *testing.T) {
 	}
 	entries, _ := os.ReadDir(filepath.Join("devcontainer", "checks"))
 	for _, e := range entries {
-		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" // run by web-static.sh, and by every web rung
+		// docs.sh, web-protected.sh and web-configs.sh (sourced) are used by the web rungs; config/ holds the baked
+		// tool configs web-configs.sh installs.
+		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" || e.Name() == "web-configs.sh" || e.Name() == "config"
 		for _, argv := range p.Checks {
 			used = used || filepath.Base(argv[0]) == e.Name()
 		}
