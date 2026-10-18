@@ -391,7 +391,7 @@ func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 	start := map[string]string{".gitignore": "node_modules/\n.npmrc.local\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
 		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
-	rungs := []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-security.sh", "web-e2e.sh"}
+	rungs := []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-deps.sh", "web-security.sh", "web-e2e.sh"}
 	tools := map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""}
 	for _, rung := range rungs {
 		for name, files := range map[string]map[string]string{
@@ -471,8 +471,9 @@ func TestTheTemplatesToolConfigsAreTheBakedOnes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != len(bakedConfigs) {
-		t.Errorf("devcontainer/checks/config has %d files, want the %d tool configs %v", len(entries), len(bakedConfigs), bakedConfigs)
+	// deps-policy.json is data for web-deps.sh, not a tool config (see deps_test.go).
+	if len(entries) != len(bakedConfigs)+1 {
+		t.Errorf("devcontainer/checks/config has %d files, want the %d tool configs %v and deps-policy.json", len(entries), len(bakedConfigs), bakedConfigs)
 	}
 	for _, name := range bakedConfigs {
 		baked, err := os.ReadFile(bakedPath(name))

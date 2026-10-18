@@ -12,7 +12,7 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
   `npm run build`, and `npm run test:e2e` (Playwright, against the built app and an API behind it).
 - Stack: React, Vite, TypeScript (strict), Tailwind, shadcn/ui style components in `src/components/ui`,
   TanStack Router for pages and TanStack Query for data. Uploads use Uppy with presigned URLs.
-- Pin every dependency to an exact version and commit `package-lock.json`. A new dependency needs a reason
+- Pin every dependency to an exact version (`x.y.z`; `~x.y.z` also passes the factory) and commit `package-lock.json`. A new dependency needs a reason
   the standard library, the browser and what is here cannot give.
 
 ## Rules for every change

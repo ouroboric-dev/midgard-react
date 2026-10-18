@@ -1,8 +1,9 @@
 # The graph of a web product (spec §4.2): the stages that write documents in scratch workspaces, Odin
 # publishing them after the approval points, the plan read into tasks, the leaves created from their realms'
 # templates, and then, for every task, a loop of the implementer with the check ladder and three reviewers, the
-# merge gate and the pointer move with the acceptance run. The roles are the operator's factory.yaml roles:
-# planner, implementer and reviewer.
+# merge gate, the pointer-contract gate (it judges the move after it: a contract change is a person's decision,
+# spec §3.4) and the pointer move with the acceptance run, which ships the routing indexes (spec §8). The roles
+# are the operator's factory.yaml roles: planner, implementer and reviewer.
 name: midgard-react
 version: 0.1.0
 nodes:
@@ -125,9 +126,13 @@ nodes:
       - id: pointer-gate
         kind: gate
         gate: pointer
+      - id: contract-gate
+        kind: gate
+        gate: pointer-contract
       - id: move
         kind: pointer
         realm: leaf
         acceptance: [accept]
+        generated: [REPOS.md, .ygg/impact.json]
         timeout: 25m
         back_to: implement
