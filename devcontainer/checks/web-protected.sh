@@ -8,7 +8,7 @@
 set -euo pipefail
 base="$(git merge-base HEAD main)" || { echo "protected: this leaf has no main to compare with"; exit 1; }
 echo "== protected files"
-files=('.npmrc')
+files=('.npmrc' '.github/')
 # Added, changed, deleted or renamed since the task started, and files git has not seen yet, ignored ones too.
 changed="$(git diff --no-renames --name-only "$base" -- "${files[@]}")"
 untracked="$(git ls-files --others -- "${files[@]}")"
