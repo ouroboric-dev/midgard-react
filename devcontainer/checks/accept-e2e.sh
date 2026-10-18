@@ -7,6 +7,8 @@
 # for it): then the oasdiff, build and start steps are skipped, and the web app runs its specs against a mock
 # of its own copy of the contract (Prism), or against no API when it has no copy. Run in the top folder of the snapshot.
 set -euo pipefail
+# shellcheck source=web-configs.sh
+. "$(dirname "$0")/web-configs.sh"
 api="${YGG_API_DIR:-repos/api}" web="${YGG_WEB_DIR:-repos/web}" wait_s="${YGG_E2E_WAIT:-60}"
 api_port="${YGG_API_PORT:-8080}" app_port="${YGG_APP_PORT:-4173}"
 db_host="${YGG_DB_HOST:-postgres}" db_port="${YGG_DB_PORT:-5432}"
@@ -32,6 +34,7 @@ pids=()
 cleanup() {
   for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done
   wait 2>/dev/null || true
+  ygg_configs_remove
   rm -rf -- "$log"
 }
 trap cleanup EXIT
@@ -66,10 +69,13 @@ else
   api_port=""
 fi
 echo "== build the web app"
-(cd "$web" && npm ci --ignore-scripts --no-audit --no-fund && node_modules/.bin/tsc --noEmit -p tsconfig.json && node_modules/.bin/vite build)
+(cd "$web" && npm ci --ignore-scripts --no-audit --no-fund)
+# The baked configs go in after the install and are the only ones the tools read (web-configs.sh).
+ygg_configs_install "$web"
+(cd "$web" && node_modules/.bin/tsc --noEmit -p .ygg-tsconfig.json && node_modules/.bin/vite build --config .ygg-vite.config.ts)
 echo "== start the web app"
-(cd "$web" && exec env ${api_port:+"API_URL=http://127.0.0.1:$api_port"} node_modules/.bin/vite preview --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
+(cd "$web" && exec env ${api_port:+"API_URL=http://127.0.0.1:$api_port"} node_modules/.bin/vite preview --config .ygg-vite.config.ts --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
 pids+=($!)
 wait_for "$app_port" app
 echo "== playwright"
-(cd "$web" && E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test)
+(cd "$web" && E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test --config .ygg-playwright.config.ts)

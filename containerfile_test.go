@@ -56,7 +56,7 @@ func TestTheStackImagesAreMadeOfPinnedInputsOnly(t *testing.T) {
 	if pipedShell.MatchString(text) || strings.Contains(text, "@latest") || strings.Contains(strings.ToLower(text), ":latest") {
 		t.Error("the Containerfile pipes a download into a shell or names a floating version")
 	}
-	for _, want := range []string{"oasdiff", "vacuum", "osv-scanner", "prism-cli", "playwright install --with-deps chromium", "COPY checks/ /opt/ygg/checks/", "go-w", "/usr/local/go"} {
+	for _, want := range []string{"oasdiff", "vacuum", "osv-scanner", "prism-cli", "playwright install --with-deps chromium", "COPY checks/ /opt/ygg/checks/", "chmod -R a+rX,go-w /opt/ygg/checks", "/usr/local/go"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the Containerfile lacks %q", want)
 		}
@@ -90,6 +90,9 @@ func TestEveryCheckScriptIsExecutableAndStartsTheWayTheOthersDo(t *testing.T) {
 		t.Fatal("no check scripts")
 	}
 	for _, e := range entries {
+		if e.IsDir() { // checks/config holds the baked tool configs, which are data (see checks_test.go)
+			continue
+		}
 		p := filepath.Join("devcontainer", "checks", e.Name())
 		st, err := os.Stat(p)
 		if err != nil {

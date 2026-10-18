@@ -7,6 +7,8 @@
 # with a note, and the reviewers look at it. Generated and type-only files are not code that needs a test.
 # Run in the leaf's top folder, on the run branch; main is where the task started from.
 set -euo pipefail
+# shellcheck source=web-configs.sh
+. "$(dirname "$0")/web-configs.sh"
 base="$(git merge-base HEAD main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
 "$(dirname "$0")/web-protected.sh"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
@@ -40,15 +42,17 @@ if [ ${#tests[@]} -eq 0 ]; then
 fi
 
 parent="$(mktemp -d)"
-trap 'rm -rf -- "$parent"' EXIT
+trap 'ygg_configs_remove; rm -rf -- "$parent"' EXIT
 git archive "$base" | tar -x -C "$parent"
 ln -s "$PWD/node_modules" "$parent/node_modules"
+# The parent runs the baked vite config too, not the one of the commit it was made from.
+ygg_configs_install "$parent"
 for f in "${tests[@]}"; do
   mkdir -p "$parent/$(dirname "$f")"
   cp -- "$f" "$parent/$f"
 done
 log="$parent/.tdd.log"
-if (cd "$parent" && node_modules/.bin/vitest run "${tests[@]}") >"$log" 2>&1; then
+if (cd "$parent" && node_modules/.bin/vitest run --config .ygg-vite.config.ts "${tests[@]}") >"$log" 2>&1; then
   echo "tdd: the new tests pass on the commit the task started from, so they test nothing new:"
   printf '  %s\n' "${tests[@]}"
   echo "A test of new behaviour fails before the code for it exists. Change the tests so they do."

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -173,7 +174,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	if code, out := script(t, repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"}), bin, "web-static.sh"); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	want := "npm ci --ignore-scripts --no-audit --no-fund\neslint .\ntsc --noEmit -p tsconfig.json\ntsc --noEmit -p tsconfig.json\nvite build\n"
+	want := "npm ci --ignore-scripts --no-audit --no-fund\neslint --no-config-lookup -c .ygg-eslint.config.js .\ntsc --noEmit -p .ygg-tsconfig.json\ntsc --noEmit -p .ygg-tsconfig.json\nvite build --config .ygg-vite.config.ts\n"
 	if calls(bin) != want {
 		t.Errorf("calls = %q, want %q: install, lint, type-check, build", calls(bin), want)
 	}
@@ -204,7 +205,7 @@ func TestStaticInstallsCleanCallsTheToolsByPathAndStopsAtTheFirstProblem(t *test
 	}
 }
 
-func TestStaticRefusesAChangeToTheConfigurationItReads(t *testing.T) {
+func TestStaticRefusesAChangeToWhatIsNotAToolConfigButTheChecksRelyOn(t *testing.T) {
 	pkg := func(scripts, deps string) string {
 		return `{"scripts": {` + scripts + `}, "dependencies": {` + deps + `}}`
 	}
@@ -215,14 +216,18 @@ func TestStaticRefusesAChangeToTheConfigurationItReads(t *testing.T) {
 		files map[string]string
 		fails string // the file named in the refusal; empty when the change is fine
 	}{
-		{"eslint config", map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"}, "eslint.config.js"},
-		{"tsconfig", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, "tsconfig.json"},
-		{"vite config", map[string]string{"vite.config.ts": "export default {test: {passWithNoTests: true}};\n"}, "vite.config.ts"},
-		{"playwright config", map[string]string{"playwright.config.ts": "export default {retries: 9};\n"}, "playwright.config.ts"},
 		{"a script of package.json", map[string]string{"package.json": pkg(`"lint": "eslint . || true"`, `"react": "1.0.0"`)}, "package.json"},
 		{"a new script", map[string]string{"package.json": pkg(`"lint": "eslint .", "test": "true"`, `"react": "1.0.0"`)}, "package.json"},
+		{"a leaf .npmrc", map[string]string{".npmrc": "script-shell=./sh\n"}, ".npmrc"},
 		{"the dependencies of package.json", map[string]string{"package.json": pkg(`"lint": "eslint ."`, `"react": "1.0.0", "zod": "3.0.0"`)}, ""},
 		{"app code only", map[string]string{"src/a.ts": "export const a = 2;\n"}, ""},
+		// The tool configs are not on the list any more: the rungs run the configs baked into the image and
+		// never read these, so a change to them changes nothing (see TestRealRungOne...).
+		{"eslint config", map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"}, ""},
+		{"a stray eslint config", map[string]string{"src/eslint.config.js": "export default [{ignores: ['**']}];\n"}, ""},
+		{"tsconfig", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, ""},
+		{"vite config", map[string]string{"vite.config.ts": "export default {test: {passWithNoTests: true}};\n"}, ""},
+		{"playwright config", map[string]string{"playwright.config.ts": "export default {retries: 9};\n"}, ""},
 	}
 	for _, c := range cases {
 		dir := repo(t, start)
@@ -240,20 +245,19 @@ func TestStaticRefusesAChangeToTheConfigurationItReads(t *testing.T) {
 			t.Errorf("%s: exit %d, calls %q, want a refusal naming %s\n%s", c.name, code, calls(bin), c.fails, out)
 		}
 	}
-	// A change not committed yet counts, and so does a deleted file.
+	// A change not committed yet counts, an ignored file too, and so does a changed script after a deleted one.
 	dir := repo(t, start)
-	put(t, dir, map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"})
+	put(t, dir, map[string]string{"package.json": pkg(`"lint": "true"`, `"react": "1.0.0"`)})
 	bin := t.TempDir()
 	webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": ""})
-	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, "eslint.config.js") {
+	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, "package.json") {
 		t.Errorf("an uncommitted change: exit %d\n%s", code, out)
 	}
 	dir = repo(t, start)
 	git(t, dir, "switch", "-q", "-c", "work")
-	git(t, dir, "rm", "-q", "tsconfig.json")
-	git(t, dir, "commit", "-q", "-m", "gone")
-	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, "tsconfig.json") {
-		t.Errorf("a deleted config: exit %d\n%s", code, out)
+	put(t, dir, map[string]string{".gitignore": "node_modules/\n.npmrc\n", ".npmrc": "script-shell=./sh\n"})
+	if code, out := script(t, dir, bin, "web-static.sh"); code == 0 || !strings.Contains(out, ".npmrc") {
+		t.Errorf("an ignored .npmrc: exit %d\n%s", code, out)
 	}
 	// With no main to compare with the check cannot tell, and refuses.
 	if code, out := script(t, leaf(t, start), bin, "web-static.sh"); code == 0 || !strings.Contains(out, "no main") {
@@ -272,7 +276,7 @@ func TestUnitInstallsCleanAndRunsVitestByPath(t *testing.T) {
 	}
 	bin = t.TempDir()
 	webTools(t, bin, map[string]string{"vitest": ""})
-	if code, _ := script(t, repo(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run\n" {
+	if code, _ := script(t, repo(t, map[string]string{"package.json": "{}"}), bin, "web-unit.sh"); code != 0 || calls(bin) != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run --config .ygg-vite.config.ts\n" {
 		t.Errorf("calls = %q", calls(bin))
 	}
 }
@@ -285,6 +289,7 @@ func TestTDDWantsTheNewTestsToFailOnTheCommitTheTaskStartedFrom(t *testing.T) {
 	vitest := func(bin string) string {
 		return `echo "vitest $*" >> "` + bin + `/calls.log"
 [ -e node_modules/.keep ] || { echo "no packages beside the parent"; exit 3; }
+cmp -s .ygg-vite.config.ts "` + bakedPath("vite.config.ts") + `" || { echo "the parent has no fresh baked vite config"; exit 4; }
 if [ -e src/lib/greet.test.ts ] && [ ! -e src/lib/greet.ts ]; then echo "Failed to resolve import @/lib/greet"; exit 1; fi
 exit "${STUB_PARENT_EXIT:-0}"
 `
@@ -330,7 +335,7 @@ exit "${STUB_PARENT_EXIT:-0}"
 	if st := git(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("the check left the leaf changed:\n%s", st)
 	}
-	if got := calls(bin); got != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run src/lib/greet.test.ts\n" {
+	if got := calls(bin); got != "npm ci --ignore-scripts --no-audit --no-fund\nvitest run --config .ygg-vite.config.ts src/lib/greet.test.ts\n" {
 		t.Errorf("vitest was run as %q, want only the new test file", got)
 	}
 }
@@ -375,50 +380,49 @@ func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 	git(t, dir, "commit", "-q", "-m", "work")
 	bin = t.TempDir()
 	webTools(t, bin, map[string]string{"vitest": ""})
-	if code, out := script(t, dir, bin, "web-tdd.sh", "STUB_VITEST_EXIT=1"); code != 0 || !strings.Contains(calls(bin), "vitest run src/routes.test.ts") {
+	if code, out := script(t, dir, bin, "web-tdd.sh", "STUB_VITEST_EXIT=1"); code != 0 || !strings.Contains(calls(bin), "vitest run --config .ygg-vite.config.ts src/routes.test.ts") {
 		t.Errorf("a renamed test: exit %d, calls %q\n%s", code, calls(bin), out)
 	}
 }
 
-// Every rung of the web ladder refuses a change to the configuration it reads before it installs or runs
-// anything, so a rung run alone is protected too. An added file counts: vitest.config.ts wins over
-// vite.config.ts, vite.config.js over vite.config.ts, and a leaf .npmrc changes how npm runs the scripts
-// of the packages.
-func TestEveryWebRungRefusesAChangeToTheConfiguration(t *testing.T) {
+// Every rung of the web ladder refuses a change to the scripts of package.json and a leaf .npmrc before it
+// installs or runs anything, so a rung run alone is protected too: a leaf .npmrc changes how npm runs the
+// scripts of the packages. The tool configs are not here: the rungs run their own baked copies.
+func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 	start := map[string]string{".gitignore": "node_modules/\n.npmrc.local\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
 		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
 	rungs := []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-security.sh", "web-e2e.sh"}
-	added := []string{"vitest.config.ts", "vitest.config.mts", "vitest.workspace.ts", "vite.config.js", "vite.config.mjs", "eslint.config.mjs", "eslint.config.ts", "tsconfig.app.json", "tsconfig.build.json", "playwright.config.js", ".npmrc"}
+	tools := map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""}
 	for _, rung := range rungs {
-		for _, name := range added {
+		for name, files := range map[string]map[string]string{
+			".npmrc":                     {".npmrc": "x\n"},
+			"package.json":               {"package.json": `{"scripts": {"lint": "true"}}`},
+			"an added script":            {"package.json": `{"scripts": {"lint": "eslint .", "pretest": "true"}}`},
+			"package.json (the scripts)": {"package.json": `{"scripts": {}}`},
+		} {
 			dir := repo(t, start)
-			work(t, dir, map[string]string{name: "x\n"})
+			work(t, dir, files)
 			bin := t.TempDir()
-			webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""})
+			webTools(t, bin, tools)
 			code, out := script(t, dir, bin, rung)
-			if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, name) || calls(bin) != "" {
-				t.Errorf("%s with an added %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
+			if code == 0 || !strings.Contains(out, "protected") || calls(bin) != "" {
+				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
 			}
 		}
-		// Modified, deleted, and added but not committed (or ignored by git) all count.
+		// Added but not committed, and ignored by git, both count.
 		dir := repo(t, start)
-		work(t, dir, map[string]string{"vite.config.ts": "export default {x: 1};\n"})
+		git(t, dir, "switch", "-q", "-c", "work")
+		put(t, dir, map[string]string{".npmrc": "script-shell=./sh\n"})
 		bin := t.TempDir()
-		webTools(t, bin, map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""})
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "vite.config.ts") || calls(bin) != "" {
-			t.Errorf("%s with a changed vite.config.ts: exit %d\n%s", rung, code, out)
+		webTools(t, bin, tools)
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
+			t.Errorf("%s with an .npmrc not committed: exit %d\n%s", rung, code, out)
 		}
 		dir = repo(t, start)
 		git(t, dir, "switch", "-q", "-c", "work")
-		git(t, dir, "rm", "-q", "playwright.config.ts")
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "playwright.config.ts") || calls(bin) != "" {
-			t.Errorf("%s with a deleted playwright.config.ts: exit %d\n%s", rung, code, out)
-		}
-		dir = repo(t, start)
-		git(t, dir, "switch", "-q", "-c", "work")
-		put(t, dir, map[string]string{"vitest.config.ts": "x\n", ".npmrc": "script-shell=./sh\n"})
-		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, "vitest.config.ts") || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
-			t.Errorf("%s with files not committed: exit %d\n%s", rung, code, out)
+		put(t, dir, map[string]string{".gitignore": "node_modules/\n.npmrc\n", ".npmrc": "script-shell=./sh\n"})
+		if code, out := script(t, dir, bin, rung); code == 0 || !strings.Contains(out, ".npmrc") || calls(bin) != "" {
+			t.Errorf("%s with an ignored .npmrc: exit %d\n%s", rung, code, out)
 		}
 	}
 }
@@ -445,5 +449,274 @@ func TestEveryNpmInstallOfTheChecksIgnoresScripts(t *testing.T) {
 				t.Errorf("%s:%d installs packages without --ignore-scripts: %s", f, i+1, line)
 			}
 		}
+	}
+}
+
+// bakedPath is where the tool configs the rungs run are kept in the source of the image: the Containerfile
+// copies devcontainer/checks to /opt/ygg/checks, where only root can write.
+func bakedPath(name string) string {
+	abs, err := filepath.Abs(filepath.Join("devcontainer", "checks", "config", name))
+	if err != nil {
+		panic(err)
+	}
+	return abs
+}
+
+var bakedConfigs = []string{"eslint.config.js", "tsconfig.json", "vite.config.ts", "playwright.config.ts"}
+
+// The baked configs are the one source of truth. The template ships identical copies so a leaf, an editor
+// and `npm run` behave as the ladder does; a copy that drifts is a change nobody reviewed.
+func TestTheTemplatesToolConfigsAreTheBakedOnes(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join("devcontainer", "checks", "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != len(bakedConfigs) {
+		t.Errorf("devcontainer/checks/config has %d files, want the %d tool configs %v", len(entries), len(bakedConfigs), bakedConfigs)
+	}
+	for _, name := range bakedConfigs {
+		baked, err := os.ReadFile(bakedPath(name))
+		if err != nil {
+			t.Errorf("no baked %s: %v", name, err)
+			continue
+		}
+		tpl, err := os.ReadFile(filepath.Join("templates", "web", name))
+		if err != nil {
+			t.Errorf("the template has no %s: %v", name, err)
+			continue
+		}
+		if !bytes.Equal(baked, tpl) {
+			t.Errorf("templates/web/%s differs from devcontainer/checks/config/%s; the baked one is the source, copy it over the template's", name, name)
+		}
+	}
+}
+
+// No rung calls a tool that reads a config without naming the baked copy it installed: a call with no flag
+// would look for a config in the leaf, which the agent writes.
+func TestEveryToolCallOfTheRungsNamesItsConfig(t *testing.T) {
+	flag := map[string]string{
+		"eslint":     "--no-config-lookup -c .ygg-eslint.config.js",
+		"tsc":        "-p .ygg-tsconfig.json",
+		"vite":       "--config .ygg-vite.config.ts",
+		"vitest":     "--config .ygg-vite.config.ts",
+		"playwright": "--config .ygg-playwright.config.ts",
+	}
+	files, _ := filepath.Glob(filepath.Join("devcontainer", "checks", "*.sh"))
+	call := regexp.MustCompile(`node_modules/\.bin/(eslint|tsc|vite|vitest|playwright)\b`)
+	seen := map[string]bool{}
+	for _, f := range files {
+		body, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			// A line may chain calls with && or ;.
+			for _, part := range regexp.MustCompile(`&&|;|\|\|`).Split(line, -1) {
+				for _, m := range call.FindAllStringSubmatch(part, -1) {
+					seen[m[1]] = true
+					if !strings.Contains(part, flag[m[1]]) {
+						t.Errorf("%s:%d calls %s without %q: %s", f, i+1, m[1], flag[m[1]], strings.TrimSpace(part))
+					}
+				}
+			}
+		}
+	}
+	for tool := range flag {
+		if !seen[tool] {
+			t.Errorf("no rung calls %s by path; the test's list of tools is out of date", tool)
+		}
+	}
+}
+
+// The baked configs go into the leaf after npm ci, as fresh files, whatever the agent left at their names:
+// a symlink, a folder, or a file. They are gone again when the rung ends.
+func TestRungsInstallTheBakedConfigsFreshAfterTheInstallAndRemoveThem(t *testing.T) {
+	probe := func(name string) string { // a tool that logs whether its config is the baked file, a plain one
+		return `if cmp -s ` + name + ` "` + bakedPath(strings.TrimPrefix(name, ".ygg-")) + `" && [ -f ` + name + ` ] && [ ! -L ` + name + ` ]; then r=fresh; else r=STALE; fi
+echo "$0 ` + name + ` $r" >> "$LOG"
+`
+	}
+	cases := []struct {
+		rung  string
+		tools map[string]string
+		want  []string
+	}{
+		{"web-static.sh", map[string]string{"eslint": probe(".ygg-eslint.config.js"), "tsc": probe(".ygg-tsconfig.json"), "vite": probe(".ygg-vite.config.ts")},
+			[]string{".ygg-eslint.config.js fresh", ".ygg-tsconfig.json fresh", ".ygg-vite.config.ts fresh"}},
+		{"web-unit.sh", map[string]string{"vitest": probe(".ygg-vite.config.ts")}, []string{".ygg-vite.config.ts fresh"}},
+	}
+	for _, c := range cases {
+		dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n.ygg-*\n"})
+		outside := t.TempDir()
+		put(t, outside, map[string]string{"evil.js": "export default [{ignores: ['**']}];\n"})
+		for name, how := range map[string]string{".ygg-eslint.config.js": "link", ".ygg-tsconfig.json": "dir", ".ygg-vite.config.ts": "file"} {
+			p := filepath.Join(dir, name)
+			switch how {
+			case "link":
+				if err := os.Symlink(filepath.Join(outside, "evil.js"), p); err != nil {
+					t.Fatal(err)
+				}
+			case "dir":
+				put(t, dir, map[string]string{name + "/x": "x"})
+			default:
+				put(t, dir, map[string]string{name: "export default {};\n"})
+			}
+		}
+		bin := t.TempDir()
+		webTools(t, bin, c.tools)
+		code, out := script(t, dir, bin, c.rung, "LOG="+filepath.Join(bin, "probe.log"))
+		log, _ := os.ReadFile(filepath.Join(bin, "probe.log"))
+		if code != 0 {
+			t.Errorf("%s: exit %d\n%s", c.rung, code, out)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(string(log), w) {
+				t.Errorf("%s: want %q in\n%s", c.rung, w, log)
+			}
+		}
+		if strings.Contains(string(log), "STALE") {
+			t.Errorf("%s ran a tool with a config that is not the baked one:\n%s", c.rung, log)
+		}
+		if b, err := os.ReadFile(filepath.Join(outside, "evil.js")); err != nil || !strings.Contains(string(b), "ignores") {
+			t.Errorf("%s wrote through the planted symlink: %v %q", c.rung, err, b)
+		}
+		for _, name := range bakedConfigs {
+			if _, err := os.Lstat(filepath.Join(dir, ".ygg-"+name)); err == nil {
+				t.Errorf("%s left .ygg-%s in the leaf", c.rung, name)
+			}
+		}
+	}
+}
+
+func TestTDDRunsTheParentWithTheBakedViteConfigAndLeavesTheLeafClean(t *testing.T) {
+	// web-tdd's vitest stand-in (TestTDDWantsTheNewTests...) fails with exit 4 when the parent lacks the baked
+	// config, so a pass there covers it. Here the leaf's own checks: nothing is left behind.
+	dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n"})
+	work(t, dir, map[string]string{"src/b.test.ts": "// test\n"})
+	bin := t.TempDir()
+	webTools(t, bin, map[string]string{"vitest": "echo \"$*\" >> \"" + bin + "/calls.log\"\nexit 1\n"})
+	if code, out := script(t, dir, bin, "web-tdd.sh"); code != 0 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	if st := git(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("the check left the leaf changed:\n%s", st)
+	}
+}
+
+// realLeaf copies the web template (without installed packages or a build) into a temp dir, commits it on
+// main, and puts files over it. The tests below run the real rung with the real tools, so they need the
+// network for npm ci (or a warm npm cache); they skip when it is not there.
+func realLeaf(t *testing.T, over map[string]string) string {
+	t.Helper()
+	if _, err := exec.LookPath("npm"); err != nil {
+		t.Skip("npm is not installed")
+	}
+	dir := t.TempDir()
+	src := filepath.Join("templates", "web")
+	err := filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		if d.IsDir() && (d.Name() == "node_modules" || d.Name() == "dist") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() {
+			return os.MkdirAll(filepath.Join(dir, rel), 0o755)
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, rel), b, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "init", "-q", "-b", "main")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "start")
+	git(t, dir, "switch", "-q", "-c", "work")
+	put(t, dir, over)
+	return dir
+}
+
+func skipOffline(t *testing.T, out string) {
+	t.Helper()
+	for _, s := range []string{"ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ENETUNREACH"} {
+		if strings.Contains(out, s) {
+			t.Skip("npm ci needs the network: " + s)
+		}
+	}
+}
+
+// The unchanged template passes rung 1 and the unit rung with the baked configs, so the move from
+// the leaf's configs to the baked ones changes nothing for a leaf that does not tamper.
+func TestRealRungsPassOnTheUnchangedTemplate(t *testing.T) {
+	for _, rung := range []string{"web-static.sh", "web-unit.sh"} {
+		dir := realLeaf(t, nil)
+		code, out := script(t, dir, "", rung)
+		skipOffline(t, out)
+		if code != 0 {
+			t.Errorf("%s on the unchanged template: exit %d\n%s", rung, code, out)
+		}
+		if st := git(t, dir, "status", "--porcelain"); st != "" {
+			t.Errorf("%s left the leaf changed:\n%s", rung, st)
+		}
+	}
+}
+
+// The bypasses of B-049: each tampers with the config the linter, the type-checker or the test runner would
+// read, to turn a rung green over code that fails it. The baked config is the one that runs, so each fails.
+func TestRealRungsIgnoreAnyConfigTheLeafHas(t *testing.T) {
+	silence := "export default [{ignores: ['**']}];\n"
+	unused := map[string]string{"src/bad.ts": "const unused = 1;\n"} // a lint error
+	merge := func(ms ...map[string]string) map[string]string {
+		out := map[string]string{}
+		for _, m := range ms {
+			for k, v := range m {
+				out[k] = v
+			}
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		rung  string
+		files map[string]string
+		link  [2]string // a symlink to make: name, target
+		want  string
+	}{
+		{"an eslint config added in src/", "web-static.sh", merge(unused, map[string]string{"src/eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
+		{"an eslint config added as .mjs", "web-static.sh", merge(unused, map[string]string{"eslint.config.mjs": silence}), [2]string{}, "no-unused-vars"},
+		{"the eslint config replaced by a symlink", "web-static.sh", merge(unused, map[string]string{"silence.js": silence}), [2]string{"eslint.config.js", "silence.js"}, "no-unused-vars"},
+		{"an eslint config hidden by .gitignore", "web-static.sh", merge(unused, map[string]string{"src/eslint.config.js": silence, ".gitignore": "node_modules/\ndist/\nsrc/eslint.config.js\n"}), [2]string{}, "no-unused-vars"},
+		{"the eslint config edited", "web-static.sh", merge(unused, map[string]string{"eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
+		{"the eslint config planted where the rung puts its own", "web-static.sh", merge(unused, map[string]string{".ygg-eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
+		{"the planted one a symlink", "web-static.sh", merge(unused, map[string]string{"silence.js": silence}), [2]string{".ygg-eslint.config.js", "silence.js"}, "no-unused-vars"},
+		{"a tsconfig that includes nothing", "web-static.sh", map[string]string{"tsconfig.json": "{\"include\": []}\n", "src/types.ts": "export const n: number = \"s\";\n"}, [2]string{}, "TS2322"},
+		{"a vite config that runs no test", "web-unit.sh", map[string]string{"vite.config.ts": "export default {test: {include: []}};\n", "src/fail.test.ts": "import {expect, it} from 'vitest';\nit('fails', () => expect(1).toBe(2));\n"}, [2]string{}, "fails"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := realLeaf(t, c.files)
+			if c.link[0] != "" {
+				if err := os.Remove(filepath.Join(dir, c.link[0])); err != nil && !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(c.link[1], filepath.Join(dir, c.link[0])); err != nil {
+					t.Fatal(err)
+				}
+			}
+			code, out := script(t, dir, "", c.rung)
+			skipOffline(t, out)
+			if code == 0 || !strings.Contains(out, c.want) {
+				t.Errorf("%s: exit %d, want a failure that says %q\n%s", c.name, code, c.want, out)
+			}
+		})
 	}
 }

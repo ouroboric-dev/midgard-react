@@ -1,14 +1,14 @@
 #!/bin/bash
-# The first step of every rung of the ladder for a web leaf (spec §9.5), so a rung run alone is protected too:
-# the ladder reads these files and runs the scripts of package.json, so a task may not change them. A rung
-# would turn green by editing the rule instead of the code. A file ADDED beside a protected one counts: the
-# tools take vitest.config.ts before vite.config.ts and vite.config.js before vite.config.ts, and a leaf
-# .npmrc changes how npm runs the scripts of the packages. The dependency list of package.json may change. The
-# task's diff is the working tree against the commit the task started from (main). Run in the leaf's top folder.
+# The first step of every rung of the ladder for a web leaf (spec §9.5), so a rung run alone is protected too.
+# The tool configs (ESLint, TypeScript, Vite, Vitest, Playwright) are not checked here: the rungs run copies
+# baked into the image and never read the leaf's (web-configs.sh). What is left is what the baked configs do
+# not cover: the scripts of package.json, which npm runs, and a leaf .npmrc, which changes how npm runs the
+# scripts of the packages. The dependency list of package.json may change. The task's diff is the working
+# tree against the commit the task started from (main). Run in the leaf's top folder.
 set -euo pipefail
 base="$(git merge-base HEAD main)" || { echo "protected: this leaf has no main to compare with"; exit 1; }
 echo "== protected files"
-files=('eslint.config.*' '.eslintrc*' 'tsconfig*.json' 'vite.config.*' 'vitest.config.*' 'vitest.workspace.*' 'playwright.config.*' '.npmrc')
+files=('.npmrc')
 # Added, changed, deleted or renamed since the task started, and files git has not seen yet, ignored ones too.
 changed="$(git diff --no-renames --name-only "$base" -- "${files[@]}")"
 untracked="$(git ls-files --others -- "${files[@]}")"
