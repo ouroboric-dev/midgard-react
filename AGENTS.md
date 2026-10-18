@@ -4,7 +4,7 @@ The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, temp
 web frontends.
 
 Follow the Yggdrasil invariants:
-https://github.com/ouroboric-dev/yggdrasil/blob/main/AGENTS.md#invariants
+<https://github.com/ouroboric-dev/yggdrasil/blob/main/AGENTS.md#invariants>
 This file only adds rules for this repo.
 
 ## This repo
