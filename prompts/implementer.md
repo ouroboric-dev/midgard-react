@@ -33,7 +33,7 @@ the test that proves it.
 
 Run these in the repository and fix what they say:
 
-```
+```text
 npm run lint
 npm run typecheck
 npm test

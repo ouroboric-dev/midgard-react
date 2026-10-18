@@ -26,7 +26,7 @@ template. A run loads it by name from the realm store (`--realm midgard-react`).
 ## Docs
 
 - Architecture: [docs/architecture.md](docs/architecture.md)
-- Engineering spec: https://github.com/ouroboric-dev/yggdrasil/blob/main/docs/2-engineering/specs/2026-10-11-yggdrasil-v0-spec.md
+- Engineering spec: <https://github.com/ouroboric-dev/yggdrasil/blob/main/docs/2-engineering/specs/2026-10-11-yggdrasil-v0-spec.md>
 
 ## Contributing
 

@@ -12,7 +12,7 @@ the slug two or three words of the product's name, lower case, joined by dashes.
 
 Start with this front matter:
 
-```
+```text
 ---
 title: <the product's name> design
 status: draft

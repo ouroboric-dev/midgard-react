@@ -2,7 +2,7 @@
 # Rung 1 of the ladder for a web leaf (spec §9.5): the packages are what package-lock.json says, the code
 # is linted and type-checked and it builds, and the docs are in order. Run in the leaf's top folder.
 set -euo pipefail
-# shellcheck source=web-configs.sh
+# shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
 trap ygg_configs_remove EXIT
 "$(dirname "$0")/web-protected.sh"

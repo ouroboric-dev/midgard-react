@@ -16,7 +16,7 @@ and change only what the design now asks for.
 
 Get the date by running `date +%F`. The slug is the design's slug. Front matter:
 
-```
+```text
 ---
 title: <the product's name> spec
 status: draft
@@ -44,7 +44,7 @@ model**; **Acceptance criteria per feature**; **Security considerations**; **Tes
 The repositories the product is built in. One leaf for each part that is built and tested on its own. For a
 product with a web app and a server, that is two:
 
-```
+```yaml
 leaves:
   repos/api:
     realm: helheim-go

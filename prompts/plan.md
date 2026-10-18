@@ -24,7 +24,7 @@ for choices the spec left to you: the order, how a feature is split, what is bui
 
 Front matter as above, then one section for each task, exactly in this form (a program reads it):
 
-```
+```text
 ## <plan>-T001: <title>
 
 - **Acceptance criteria:**

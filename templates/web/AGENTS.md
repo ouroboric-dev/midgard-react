@@ -3,7 +3,7 @@
 The React web app of this product. It talks to the API only through `contracts/api.openapi.yaml`.
 
 Follow the Yggdrasil invariants:
-https://github.com/ouroboric-dev/yggdrasil/blob/main/AGENTS.md#invariants
+<https://github.com/ouroboric-dev/yggdrasil/blob/main/AGENTS.md#invariants>
 This file only adds rules for this leaf. Read `docs/` for the design; this file says how to work here.
 
 ## Work here
