@@ -1,0 +1,49 @@
+# CI: the required check "test" (spec §13; plan Phase 1). It runs in the Node image (the template tests need
+# npm), adds git, python3 (the e2e test) and gcc (for -race) with apt-get, and gets Go from actions/setup-go.
+# It runs without go.work, so it builds this module exactly as its go.mod says. YGG_REQUIRE_TEMPLATES makes the template tests fail, not skip, when the npm
+# registry can't be reached. The pr-bot can't change this file (it has no workflows permission); the
+# founder pushes changes to it.
+name: ci
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: docker.io/library/node@sha256:efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=readonly
+      YGG_REQUIRE_TEMPLATES: "1"
+    steps:
+      # First, so checkout makes a real git clone. The first three are what the stack's web stage installs;
+      # python3 is the e2e test's server stand-in; gcc and libc6-dev are cgo for -race.
+      - name: apt
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git python3 gcc libc6-dev
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.9
+          cache: false
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet
+        run: go vet ./...
+      - name: test
+        # As the image's non-root user `node`: the sandbox code refuses to run as root. su drops PATH, so it
+        # is passed in; the Go install folder must be readable by node.
+        run: |
+          chmod -R a+rX "$(dirname "$(dirname "$(command -v go)")")"
+          chown -R node:node "$GITHUB_WORKSPACE"
+          su node -c "PATH='$PATH' GOWORK=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly YGG_REQUIRE_TEMPLATES=1 GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache go test -race -v ./..."
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

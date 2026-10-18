@@ -52,6 +52,15 @@ small leaves with stand-ins for the image's tools (and python3 for the servers);
 which needs the npm registry the first time (set `YGG_REQUIRE_TEMPLATES` to fail instead of skipping when
 it cannot be reached). The image and the tools in it are checked on a real engine (Phase 5b, v0-H14).
 
+## CI
+
+`.github/workflows/ci.yml` has one job, `test`, the required check on `main`. It runs in the Node image (the
+template tests need `npm`) with `git`, `python3` (the e2e test's servers) and `gcc` (for `-race`) installed by
+`apt-get`, and Go from `actions/setup-go`, without `go.work`,
+and runs `gofmt`, `go vet`, `go test -race -v` as the non-root user `node`, and `govulncheck`. It sets
+`YGG_REQUIRE_TEMPLATES`, so the template tests fail instead of skipping when the npm registry cannot be
+reached. The pr-bot cannot change the workflow; the founder pushes changes to it.
+
 ## Depends on
 
 - Gungnir's schemas.
