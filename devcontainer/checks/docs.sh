@@ -3,6 +3,8 @@
 # the docs standard asks for (title, a status and a date; style and related are optional), a plain file name, and links that point at files that exist. Prose rules
 # (Vale) wait for a later change. Run in a leaf's top folder; it reads and changes nothing.
 set -euo pipefail
+# The tools are found in the image's root-owned folders only, never in one the agent can write (/go/bin).
+export PATH="${YGG_CHECKS_PATH:-/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin}"
 [ -d docs ] || { echo "docs: no docs/ folder, nothing to check"; exit 0; }
 problems=0
 say() { echo "docs: $*"; problems=$((problems + 1)); }
