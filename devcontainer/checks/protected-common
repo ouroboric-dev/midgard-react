@@ -1,0 +1,17 @@
+# The files that check every product. Every rung refuses a task's change to them (spec §9.5).
+# One git pathspec a line. The same file in every build realm: check-repos.sh --check shared compares them.
+.github/
+.devcontainer/
+.pre-commit-config.yaml
+:(glob)**/.markdownlint*
+:(glob)**/.yamllint
+:(glob)**/.yamllint.yaml
+:(glob)**/.yamllint.yml
+:(glob)**/.shellcheckrc
+:(glob)**/.gitleaks.toml
+:(glob)**/.gitleaksignore
+:(glob)**/REUSE.toml
+.reuse/
+LICENSES/
+LICENSE
+:(glob)**/*.license

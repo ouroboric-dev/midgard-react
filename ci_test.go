@@ -77,6 +77,11 @@ func TestTemplateCI(t *testing.T) {
 	if _, ok := pkg.Scripts["test"]; !ok {
 		t.Error("package.json has no script test, which `npm test` runs")
 	}
+	// ESLint looks up the nearest config of each folder; the CI's lint reads the one protected config at the top
+	// and no other, so a config planted in a subfolder changes nothing (the ladder's own lint ignores them too).
+	if got, want := pkg.Scripts["lint"], "eslint --no-config-lookup -c eslint.config.js ."; got != want {
+		t.Errorf("the lint script is %q, want %q", got, want)
+	}
 	runs := regexp.MustCompile(`npm run (\S+)`).FindAllStringSubmatch(wf, -1)
 	if len(runs) == 0 {
 		t.Error("the workflow runs no npm script")

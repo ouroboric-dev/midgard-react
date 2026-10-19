@@ -90,7 +90,7 @@ func TestEveryCheckScriptIsExecutableAndStartsTheWayTheOthersDo(t *testing.T) {
 		t.Fatal("no check scripts")
 	}
 	for _, e := range entries {
-		if e.IsDir() { // checks/config holds the baked tool configs, which are data (see checks_test.go)
+		if e.IsDir() || e.Name() == "protected-common" { // checks/config holds the baked tool configs and protected-common the list of protected files: data, not scripts
 			continue
 		}
 		p := filepath.Join("devcontainer", "checks", e.Name())
