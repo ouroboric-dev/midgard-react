@@ -49,8 +49,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
   every rung, adds the web names (`.npmrc`, `eslint.config.*`, `.eslintrc*`, `tsconfig*.json`, `vite.config.*`,
   `vitest.config.*`, `vitest.workspace.*`, `playwright.config.*`) and refuses a task's change to any of them:
   added, changed, deleted, moved, swapped for a symlink, untracked or ignored by `.gitignore`, against `main`.
-  The `**/` entries skip `node_modules/`, where installed packages keep config files of their own; the
-  root-anchored entries (`.github/`, `.devcontainer/`, `.reuse/`, `LICENSES/`) do not. With no `main`, a
+  `main` is the branch: a tag or another ref called `main` does not count. The `**/` entries skip
+  `node_modules/`, where installed packages keep config files of their own, in the listing of untracked files
+  only: a tracked file there is a change. The root-anchored entries (`.github/`, `.devcontainer/`, `.reuse/`,
+  `LICENSES/`) skip nothing, and go to `git` without their trailing slash, so a folder swapped for a symlink is
+  caught too; the root `.npmrc` is named plain as well, so a folder of that name is caught. With no `main`, a
   missing or empty list, or a failing `git`, the rung fails. The file is shared: the Go realm keeps a
   byte-for-byte copy, and `check-repos.sh --check shared` fails when they differ. The Containerfile bakes it
   with the folder into `/opt/ygg/checks`. The rungs still run the tool configs baked beside the scripts, not
