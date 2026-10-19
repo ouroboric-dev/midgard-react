@@ -2,10 +2,12 @@ package midgard
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -65,6 +67,12 @@ func script(t *testing.T, dir, bin, name string, env ...string) (int, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return runScript(t, abs, dir, bin, env...)
+}
+
+// runScript runs the script at path abs, as script does.
+func runScript(t *testing.T, abs, dir, bin string, env ...string) (int, string) {
+	t.Helper()
 	cmd := exec.Command("bash", abs)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
@@ -74,12 +82,12 @@ func script(t *testing.T, dir, bin, name string, env ...string) (int, string) {
 	cmd.Env = append(cmd.Env, env...)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	err = cmd.Run()
+	err := cmd.Run()
 	if ee, ok := err.(*exec.ExitError); ok {
 		return ee.ExitCode(), out.String()
 	}
 	if err != nil {
-		t.Fatalf("%s: %v", name, err)
+		t.Fatalf("%s: %v", abs, err)
 	}
 	return 0, out.String()
 }
@@ -221,13 +229,13 @@ func TestStaticRefusesAChangeToWhatIsNotAToolConfigButTheChecksRelyOn(t *testing
 		{"a leaf .npmrc", map[string]string{".npmrc": "script-shell=./sh\n"}, ".npmrc"},
 		{"the dependencies of package.json", map[string]string{"package.json": pkg(`"lint": "eslint ."`, `"react": "1.0.0", "zod": "3.0.0"`)}, ""},
 		{"app code only", map[string]string{"src/a.ts": "export const a = 2;\n"}, ""},
-		// The tool configs are not on the list any more: the rungs run the configs baked into the image and
-		// never read these, so a change to them changes nothing (see TestRealRungOne...).
-		{"eslint config", map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"}, ""},
-		{"a stray eslint config", map[string]string{"src/eslint.config.js": "export default [{ignores: ['**']}];\n"}, ""},
-		{"tsconfig", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, ""},
-		{"vite config", map[string]string{"vite.config.ts": "export default {test: {passWithNoTests: true}};\n"}, ""},
-		{"playwright config", map[string]string{"playwright.config.ts": "export default {retries: 9};\n"}, ""},
+		// The tool configs are protected too: the rungs run the configs baked into the image and never read
+		// these, but a task has no business changing them (TestEveryRungRefusesAChangeToAProtectedFile).
+		{"eslint config", map[string]string{"eslint.config.js": "export default [{ignores: ['**']}];\n"}, "eslint.config.js"},
+		{"a stray eslint config", map[string]string{"src/eslint.config.js": "export default [{ignores: ['**']}];\n"}, "src/eslint.config.js"},
+		{"tsconfig", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, "tsconfig.json"},
+		{"vite config", map[string]string{"vite.config.ts": "export default {test: {passWithNoTests: true}};\n"}, "vite.config.ts"},
+		{"playwright config", map[string]string{"playwright.config.ts": "export default {retries: 9};\n"}, "playwright.config.ts"},
 	}
 	for _, c := range cases {
 		dir := repo(t, start)
@@ -241,7 +249,7 @@ func TestStaticRefusesAChangeToWhatIsNotAToolConfigButTheChecksRelyOn(t *testing
 			}
 			continue
 		}
-		if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, c.fails) || calls(bin) != "" {
+		if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, c.fails) || calls(bin) != "" {
 			t.Errorf("%s: exit %d, calls %q, want a refusal naming %s\n%s", c.name, code, calls(bin), c.fails, out)
 		}
 	}
@@ -391,7 +399,7 @@ func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 	start := map[string]string{".gitignore": "node_modules/\n.npmrc.local\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
 		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
-	rungs := []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-deps.sh", "web-security.sh", "web-e2e.sh"}
+	rungs := packRungs(t)
 	tools := map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""}
 	for _, rung := range rungs {
 		for name, files := range map[string]map[string]string{
@@ -405,7 +413,7 @@ func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 			bin := t.TempDir()
 			webTools(t, bin, tools)
 			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
-			if code == 0 || !strings.Contains(out, "protected") || calls(bin) != "" {
+			if code == 0 || !strings.Contains(out, refusal) || calls(bin) != "" {
 				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
 			}
 		}
@@ -612,6 +620,13 @@ func TestTDDRunsTheParentWithTheBakedViteConfigAndLeavesTheLeafClean(t *testing.
 // network for npm ci (or a warm npm cache); they skip when it is not there.
 func realLeaf(t *testing.T, over map[string]string) string {
 	t.Helper()
+	return realLeafOn(t, nil, [2]string{}, over)
+}
+
+// realLeafOn is realLeaf with the files onMain (and a symlink, name and target) in the commit the task starts
+// from, force-added so that a .gitignore does not keep them out. over goes on the work branch, not committed.
+func realLeafOn(t *testing.T, onMain map[string]string, link [2]string, over map[string]string) string {
+	t.Helper()
 	if _, err := exec.LookPath("npm"); err != nil {
 		t.Skip("npm is not installed")
 	}
@@ -637,8 +652,17 @@ func realLeaf(t *testing.T, over map[string]string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	put(t, dir, onMain)
+	if link[0] != "" {
+		if err := os.Remove(filepath.Join(dir, link[0])); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(link[1], filepath.Join(dir, link[0])); err != nil {
+			t.Fatal(err)
+		}
+	}
 	git(t, dir, "init", "-q", "-b", "main")
-	git(t, dir, "add", "-A")
+	git(t, dir, "add", "-Af")
 	git(t, dir, "commit", "-q", "-m", "start")
 	git(t, dir, "switch", "-q", "-c", "work")
 	put(t, dir, over)
@@ -671,48 +695,34 @@ func TestRealRungsPassOnTheUnchangedTemplate(t *testing.T) {
 }
 
 // The bypasses of B-049: each tampers with the config the linter, the type-checker or the test runner would
-// read, to turn a rung green over code that fails it. The baked config is the one that runs, so each fails.
+// read, to turn a rung green over code that fails it. The weak config is already on the leaf's main (a change to
+// it in the task's diff is refused before the tools run, see below), so the baked config is the one that runs,
+// and each fails on what the weak config would have hidden.
 func TestRealRungsIgnoreAnyConfigTheLeafHas(t *testing.T) {
 	silence := "export default [{ignores: ['**']}];\n"
-	unused := map[string]string{"src/bad.ts": "const unused = 1;\n"} // a lint error
-	merge := func(ms ...map[string]string) map[string]string {
-		out := map[string]string{}
-		for _, m := range ms {
-			for k, v := range m {
-				out[k] = v
-			}
-		}
-		return out
-	}
+	unused := map[string]string{"src/bad.ts": "const unused = 1;\n"} // a lint error, in the task
 	cases := []struct {
 		name  string
 		rung  string
-		files map[string]string
-		link  [2]string // a symlink to make: name, target
+		main  map[string]string // on main, with the config
+		link  [2]string         // a symlink on main: name, target
+		files map[string]string // the task's own files
 		want  string
 	}{
-		{"an eslint config added in src/", "web-static.sh", merge(unused, map[string]string{"src/eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
-		{"an eslint config added as .mjs", "web-static.sh", merge(unused, map[string]string{"eslint.config.mjs": silence}), [2]string{}, "no-unused-vars"},
-		{"the eslint config replaced by a symlink", "web-static.sh", merge(unused, map[string]string{"silence.js": silence}), [2]string{"eslint.config.js", "silence.js"}, "no-unused-vars"},
-		{"an eslint config hidden by .gitignore", "web-static.sh", merge(unused, map[string]string{"src/eslint.config.js": silence, ".gitignore": "node_modules/\ndist/\nsrc/eslint.config.js\n"}), [2]string{}, "no-unused-vars"},
-		{"the eslint config edited", "web-static.sh", merge(unused, map[string]string{"eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
-		{"the eslint config planted where the rung puts its own", "web-static.sh", merge(unused, map[string]string{".ygg-eslint.config.js": silence}), [2]string{}, "no-unused-vars"},
-		{"the planted one a symlink", "web-static.sh", merge(unused, map[string]string{"silence.js": silence}), [2]string{".ygg-eslint.config.js", "silence.js"}, "no-unused-vars"},
-		{"a tsconfig that includes nothing", "web-static.sh", map[string]string{"tsconfig.json": "{\"include\": []}\n", "src/types.ts": "export const n: number = \"s\";\n"}, [2]string{}, "TS2322"},
-		{"a vite config that runs no test", "web-unit.sh", map[string]string{"vite.config.ts": "export default {test: {include: []}};\n", "src/fail.test.ts": "import {expect, it} from 'vitest';\nit('fails', () => expect(1).toBe(2));\n"}, [2]string{}, "fails"},
+		{"an eslint config added in src/", "web-static.sh", map[string]string{"src/eslint.config.js": silence}, [2]string{}, unused, "no-unused-vars"},
+		{"an eslint config added as .mjs", "web-static.sh", map[string]string{"eslint.config.mjs": silence}, [2]string{}, unused, "no-unused-vars"},
+		{"the eslint config replaced by a symlink", "web-static.sh", map[string]string{"silence.js": silence}, [2]string{"eslint.config.js", "silence.js"}, unused, "no-unused-vars"},
+		{"an eslint config hidden by .gitignore", "web-static.sh", map[string]string{"src/eslint.config.js": silence, ".gitignore": "node_modules/\ndist/\nsrc/eslint.config.js\n"}, [2]string{}, unused, "no-unused-vars"},
+		{"the eslint config edited", "web-static.sh", map[string]string{"eslint.config.js": silence}, [2]string{}, unused, "no-unused-vars"},
+		{"the eslint config planted where the rung puts its own", "web-static.sh", map[string]string{".ygg-eslint.config.js": silence}, [2]string{}, unused, "no-unused-vars"},
+		{"the planted one a symlink", "web-static.sh", map[string]string{"silence.js": silence}, [2]string{".ygg-eslint.config.js", "silence.js"}, unused, "no-unused-vars"},
+		{"a tsconfig that includes nothing", "web-static.sh", map[string]string{"tsconfig.json": "{\"include\": []}\n"}, [2]string{}, map[string]string{"src/types.ts": "export const n: number = \"s\";\n"}, "TS2322"},
+		{"a vite config that runs no test", "web-unit.sh", map[string]string{"vite.config.ts": "export default {test: {include: []}};\n"}, [2]string{}, map[string]string{"src/fail.test.ts": "import {expect, it} from 'vitest';\nit('fails', () => expect(1).toBe(2));\n"}, "fails"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := realLeaf(t, c.files)
-			if c.link[0] != "" {
-				if err := os.Remove(filepath.Join(dir, c.link[0])); err != nil && !os.IsNotExist(err) {
-					t.Fatal(err)
-				}
-				if err := os.Symlink(c.link[1], filepath.Join(dir, c.link[0])); err != nil {
-					t.Fatal(err)
-				}
-			}
+			dir := realLeafOn(t, c.main, c.link, c.files)
 			code, out := script(t, dir, "", c.rung)
 			skipOffline(t, out)
 			if code == 0 || !strings.Contains(out, c.want) {
@@ -720,6 +730,17 @@ func TestRealRungsIgnoreAnyConfigTheLeafHas(t *testing.T) {
 			}
 		})
 	}
+	// The same weak config in the task's diff is refused before any tool runs.
+	t.Run("the same config in the task's diff", func(t *testing.T) {
+		t.Parallel()
+		files := map[string]string{"src/bad.ts": "const unused = 1;\n", "eslint.config.js": silence}
+		dir := realLeafOn(t, nil, [2]string{}, files)
+		code, out := script(t, dir, "", "web-static.sh")
+		skipOffline(t, out)
+		if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, "eslint.config.js") || strings.Contains(out, "no-unused-vars") {
+			t.Errorf("exit %d, want a refusal naming eslint.config.js\n%s", code, out)
+		}
+	})
 }
 
 // Every rung of the web ladder refuses a task that adds, changes or deletes a file of the leaf's dev container
@@ -759,7 +780,7 @@ func TestEveryRungRefusesADevContainerOrWorkflowChange(t *testing.T) {
 			}},
 			{"ignored by git", base, func(dir string) { put(t, dir, ignored) }},
 		}
-		for _, rung := range []string{"web-static.sh", "web-unit.sh", "web-tdd.sh", "web-contract.sh", "web-deps.sh", "web-security.sh", "web-e2e.sh"} {
+		for _, rung := range packRungs(t) {
 			for _, c := range cases {
 				dir := repo(t, c.start)
 				c.change(dir)
@@ -769,10 +790,303 @@ func TestEveryRungRefusesADevContainerOrWorkflowChange(t *testing.T) {
 				if c.name == "another file beside it" {
 					want = p.other
 				}
-				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, want) || calls(bin) != "" {
+				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, want) || calls(bin) != "" {
 					t.Errorf("%s with %s %s: exit %d, calls %q\n%s", rung, p.file, c.name, code, calls(bin), out)
 				}
 			}
 		}
+	}
+}
+
+// packRungs are the scripts of the leaf's ladder, in the order of the pack (pack.yaml: leaf.checks, each named by
+// the checks map), so a rung added to the pack is covered without a list in a test.
+func packRungs(t *testing.T) []string {
+	t.Helper()
+	p := loadPack(t)
+	var rungs []string
+	for _, name := range p.Leaf.Checks {
+		argv := p.Checks[name]
+		if len(argv) != 1 {
+			t.Fatalf("check %s is %v", name, argv)
+		}
+		rungs = append(rungs, filepath.Base(argv[0]))
+	}
+	if len(rungs) < 7 {
+		t.Fatalf("the ladder is %v", rungs)
+	}
+	return rungs
+}
+
+// refusal is what the protected step prints when it refuses a task, and only then (the header "== protected
+// files" is always printed).
+const refusal = "this task changes files the checks rely on"
+
+// wentOn says that a rung passed its protected step and carried on: it installed (npm ci), or for web-deps
+// printed the policy header that comes before its install.
+func wentOn(out string, bin string) bool {
+	return strings.Contains(calls(bin), "npm ci") || strings.Contains(out, "== dependency policy")
+}
+
+// webProtected are the names the web realm adds to the shared list (protected-common).
+var webProtected = []string{":(glob)**/.npmrc", ":(glob)**/eslint.config.*", ":(glob)**/.eslintrc*", ":(glob)**/tsconfig*.json",
+	":(glob)**/vite.config.*", ":(glob)**/vitest.config.*", ":(glob)**/vitest.workspace.*", ":(glob)**/playwright.config.*"}
+
+// commonProtected is what protected-common must name. The test reads the file for the cases, so this list is what
+// stops a line taken out of the file from taking its cases with it.
+var commonProtected = []string{".github/", ".devcontainer/", ".pre-commit-config.yaml", ":(glob)**/.markdownlint*",
+	":(glob)**/.yamllint", ":(glob)**/.yamllint.yaml", ":(glob)**/.yamllint.yml", ":(glob)**/.shellcheckrc",
+	":(glob)**/.gitleaks.toml", ":(glob)**/.gitleaksignore", ":(glob)**/REUSE.toml", ".reuse/", "LICENSES/", "LICENSE",
+	":(glob)**/*.license"}
+
+// protectedSpecs returns the pathspecs of devcontainer/checks/protected-common, comments and blank lines taken out,
+// then the web realm's own.
+func protectedSpecs(t *testing.T) []string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("devcontainer", "checks", "protected-common"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var specs []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			specs = append(specs, line)
+		}
+	}
+	if !slices.Equal(specs, commonProtected) {
+		t.Errorf("protected-common names %q, want %q", specs, commonProtected)
+	}
+	return append(slices.Clone(commonProtected), webProtected...)
+}
+
+// protectedPaths turns a pathspec into the paths a task could touch: a folder gets a file in it, a glob a
+// file with that name at the top and nested, and a plain name is itself.
+func protectedPaths(spec string) []string {
+	if name, ok := strings.CutPrefix(spec, ":(glob)**/"); ok {
+		name = strings.ReplaceAll(name, "*", "x")
+		return []string{name, "a/b/" + name}
+	}
+	if strings.HasSuffix(spec, "/") {
+		return []string{spec + "x.json"}
+	}
+	return []string{spec}
+}
+
+// protectedStart is the commit the tasks of the tests below start from: no config of any tool.
+var protectedStart = map[string]string{".gitignore": "node_modules/\n", "package.json": `{"scripts": {"lint": "eslint ."}}`,
+	"contracts/api.openapi.yaml": "x", "src/a.ts": "export const a = 1;\n"}
+
+var webToolStubs = map[string]string{"eslint": "", "tsc": "", "vite": "", "vitest": "", "prism": "", "playwright": ""}
+
+// Everything the list names is refused whatever the way it got there, by every rung of the pack's ladder and
+// before any tool runs: added, changed, deleted, moved away, left untracked, ignored by .gitignore, or swapped
+// for a symlink (a type change).
+func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
+	forms := []struct {
+		name   string
+		onMain bool // the file is in the commit the task started from
+		apply  func(t *testing.T, dir, path string)
+	}{
+		{"added", false, func(t *testing.T, dir, path string) {
+			put(t, dir, map[string]string{path: "x\n"})
+			git(t, dir, "add", "--", path)
+			git(t, dir, "commit", "-q", "-m", "work")
+		}},
+		{"changed", true, func(t *testing.T, dir, path string) {
+			put(t, dir, map[string]string{path: "changed\n"})
+			git(t, dir, "add", "--", path)
+			git(t, dir, "commit", "-q", "-m", "work")
+		}},
+		{"deleted", true, func(t *testing.T, dir, path string) {
+			git(t, dir, "rm", "-q", "--", path)
+			git(t, dir, "commit", "-q", "-m", "work")
+		}},
+		{"moved away", true, func(t *testing.T, dir, path string) {
+			git(t, dir, "mv", "--", path, "moved.txt")
+			git(t, dir, "commit", "-q", "-m", "work")
+		}},
+		{"untracked", false, func(t *testing.T, dir, path string) {
+			put(t, dir, map[string]string{path: "x\n"})
+		}},
+		{"deleted, not committed", true, func(t *testing.T, dir, path string) {
+			if err := os.Remove(filepath.Join(dir, path)); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"ignored", false, func(t *testing.T, dir, path string) {
+			put(t, dir, map[string]string{".gitignore": "node_modules/\n/" + path + "\n", path: "x\n"})
+		}},
+		{"swapped for a symlink", true, func(t *testing.T, dir, path string) {
+			if err := os.Remove(filepath.Join(dir, path)); err != nil {
+				t.Fatal(err)
+			}
+			rel, err := filepath.Rel(filepath.Dir(path), "package.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(rel, filepath.Join(dir, path)); err != nil {
+				t.Fatal(err)
+			}
+			git(t, dir, "add", "--", path)
+			git(t, dir, "commit", "-q", "-m", "work")
+		}},
+	}
+	rungs := packRungs(t)
+	for _, spec := range protectedSpecs(t) {
+		for _, path := range protectedPaths(spec) {
+			for _, f := range forms {
+				for _, rung := range rungs {
+					t.Run(rung+" "+path+" "+f.name, func(t *testing.T) {
+						t.Parallel()
+						start := maps.Clone(protectedStart)
+						if f.onMain {
+							start[path] = "start\n"
+						}
+						dir := repo(t, start)
+						git(t, dir, "switch", "-q", "-c", "work")
+						f.apply(t, dir, path)
+						bin := t.TempDir()
+						webTools(t, bin, webToolStubs)
+						code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+						if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, path) || calls(bin) != "" {
+							t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+						}
+					})
+				}
+			}
+		}
+	}
+	// The node_modules exclusion belongs to the glob entries only: a root-anchored folder is protected whatever it holds.
+	for _, rung := range rungs {
+		for _, path := range []string{".github/actions/a/node_modules/dep/index.js", ".devcontainer/node_modules/x", ".reuse/node_modules/x", "LICENSES/node_modules/x"} {
+			t.Run(rung+" "+path+" refused", func(t *testing.T) {
+				t.Parallel()
+				dir := repo(t, protectedStart)
+				git(t, dir, "switch", "-q", "-c", "work")
+				put(t, dir, map[string]string{path: "x\n"})
+				git(t, dir, "add", "-f", "--", path)
+				git(t, dir, "commit", "-q", "-m", "work")
+				bin := t.TempDir()
+				webTools(t, bin, webToolStubs)
+				code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+				if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, path) || calls(bin) != "" {
+					t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+				}
+			})
+		}
+	}
+	// The names a task is allowed to add look like protected ones and are not, and neither are the config files
+	// of the packages installed in the leaf's own node_modules.
+	for _, rung := range rungs {
+		for _, path := range []string{"docs/licensing.md", "src/license.ts", "LICENSE.md", "src/vite-env.d.ts", "src/eslint-rules.ts", "src/tsconfig-notes.md", "node_modules/p/x.license", "node_modules/p/.markdownlint.json"} {
+			t.Run(rung+" "+path+" passes", func(t *testing.T) {
+				t.Parallel()
+				dir := repo(t, protectedStart)
+				git(t, dir, "switch", "-q", "-c", "work")
+				put(t, dir, map[string]string{path: "x\n"})
+				git(t, dir, "add", "-f", "--", path)
+				git(t, dir, "commit", "-q", "-m", "work")
+				put(t, dir, map[string]string{"node_modules/pkg/tsconfig.json": "{}\n", "node_modules/pkg/.eslintrc.json": "{}\n", "node_modules/pkg/LICENSE": "x\n", "node_modules/pkg/x.license": "x\n", "node_modules/pkg/eslint.config.js": "x\n", "node_modules/pkg/.npmrc": "x\n"})
+				bin := t.TempDir()
+				webTools(t, bin, webToolStubs)
+				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); strings.Contains(out, refusal) || strings.Contains(out, "protected:") || !wentOn(out, bin) {
+					t.Errorf("a file a task may add was refused, or the rung did not go on: exit %d, calls %q\n%s", code, calls(bin), out)
+				}
+			})
+		}
+	}
+}
+
+// With no main to compare to, or no list of protected files, every rung fails before any tool runs: it never
+// passes unchecked.
+func TestEveryRungFailsClosedWithoutMainOrList(t *testing.T) {
+	for _, rung := range packRungs(t) {
+		t.Run(rung+" no main", func(t *testing.T) {
+			t.Parallel()
+			dir := leaf(t, protectedStart)
+			git(t, dir, "init", "-q", "-b", "trunk")
+			git(t, dir, "add", "-A")
+			git(t, dir, "commit", "-q", "-m", "start")
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			if code == 0 || !strings.Contains(out, "main") || calls(bin) != "" {
+				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+			}
+		})
+		for name, list := range map[string]*string{"a missing list": nil, "an empty list": new(string), "a list of comments": ptr("# only a comment\n\n  \n")} {
+			t.Run(rung+" "+name, func(t *testing.T) {
+				t.Parallel()
+				// the checks folder of the image, with the list gone or empty
+				checks := t.TempDir()
+				copyChecks(t, checks)
+				if list != nil {
+					put(t, checks, map[string]string{"protected-common": *list})
+				}
+				dir := repo(t, protectedStart)
+				bin := t.TempDir()
+				webTools(t, bin, webToolStubs)
+				code, out := runScript(t, filepath.Join(checks, rung), dir, bin, "YGG_E2E_WAIT=1")
+				if code == 0 || !strings.Contains(out, "protected-common") || calls(bin) != "" {
+					t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+				}
+			})
+		}
+	}
+}
+
+func ptr(s string) *string { return &s }
+
+// A git command that fails must fail the rung before any tool runs: it never goes on as if nothing changed.
+func TestEveryRungFailsWhenGitFails(t *testing.T) {
+	for _, rung := range packRungs(t) {
+		t.Run(rung, func(t *testing.T) {
+			t.Parallel()
+			dir := repo(t, protectedStart)
+			tree := git(t, dir, "rev-parse", "main^{tree}")
+			git(t, dir, "switch", "-q", "-c", "work")
+			put(t, dir, map[string]string{"src/b.ts": "export const b = 1;\n"})
+			git(t, dir, "add", "src/b.ts")
+			git(t, dir, "commit", "-q", "-m", "work")
+			obj := filepath.Join(dir, ".git", "objects", tree[:2], tree[2:])
+			if err := os.Chmod(obj, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(obj); err != nil {
+				t.Fatal(err)
+			}
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			if code == 0 || !strings.Contains(out, "git failed") || calls(bin) != "" {
+				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+			}
+		})
+	}
+}
+
+// copyChecks copies devcontainer/checks into dir, executable as the image makes them, except the list of
+// protected files.
+func copyChecks(t *testing.T, dir string) {
+	t.Helper()
+	src := filepath.Join("devcontainer", "checks")
+	err := filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		if d.IsDir() {
+			return os.MkdirAll(filepath.Join(dir, rel), 0o755)
+		}
+		if d.Name() == "protected-common" {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, rel), b, 0o755)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

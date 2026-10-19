@@ -34,6 +34,12 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
   send, and the server's answer wins.
 - No secret, token or real person's data in the repository, in a test or in a log line.
 - Accessible by default: real buttons and links, labels on inputs, text alternatives.
+- **Do not change the files that configure the checks.** They are `.github/`, `.devcontainer/`,
+  `.pre-commit-config.yaml`, `.npmrc`, `eslint.config.*`, `.eslintrc*`, `tsconfig*.json`, `vite.config.*`,
+  `vitest.config.*`, `vitest.workspace.*`, `playwright.config.*`, `.markdownlint*`, `.yamllint*`,
+  `.shellcheckrc`, `.gitleaks*`, `REUSE.toml`, `.reuse/`, `LICENSES/`, `LICENSE` and `*.license`, and the
+  scripts in `package.json`. The factory refuses a task that adds, changes, deletes or links one. If a check
+  is wrong, say so in your report; do not edit the file.
 
 ## Layout
 

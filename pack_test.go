@@ -64,7 +64,8 @@ func TestThePackLoadsAsTheLeadRealmWithTwoStacksFromOneContext(t *testing.T) {
 	for _, e := range entries {
 		// docs.sh, web-protected.sh and web-configs.sh (sourced) are used by the web rungs; config/ holds the baked
 		// tool configs web-configs.sh installs and the policy web-deps.sh reads, and lib/ holds the checker it runs.
-		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" || e.Name() == "web-configs.sh" || e.Name() == "config" || e.Name() == "lib"
+		// protected-common is the list web-protected.sh reads.
+		used := e.Name() == "docs.sh" || e.Name() == "web-protected.sh" || e.Name() == "protected-common" || e.Name() == "web-configs.sh" || e.Name() == "config" || e.Name() == "lib"
 		for _, argv := range p.Checks {
 			used = used || filepath.Base(argv[0]) == e.Name()
 		}

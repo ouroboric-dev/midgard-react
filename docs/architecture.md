@@ -43,6 +43,18 @@ change proposal `2026-10-17-realm-leaf-naming`).
   `accept-e2e` is the acceptance run: on a snapshot of the project it checks the API still keeps what the
   web app's copy of the contract promises (the copy may lag; the API may not break it), builds and starts
   the API against Postgres, and runs the Playwright specs.
+- `devcontainer/checks/protected-common`: the files that configure the checks of every product, one git
+  pathspec a line: the CI and dev container (`.github/`, `.devcontainer/`), `.pre-commit-config.yaml`, the
+  markdown, YAML, shell and secret-scan configs, and the licensing files. `web-protected.sh`, the first step of
+  every rung, adds the web names (`.npmrc`, `eslint.config.*`, `.eslintrc*`, `tsconfig*.json`, `vite.config.*`,
+  `vitest.config.*`, `vitest.workspace.*`, `playwright.config.*`) and refuses a task's change to any of them:
+  added, changed, deleted, moved, swapped for a symlink, untracked or ignored by `.gitignore`, against `main`.
+  The `**/` entries skip `node_modules/`, where installed packages keep config files of their own; the
+  root-anchored entries (`.github/`, `.devcontainer/`, `.reuse/`, `LICENSES/`) do not. With no `main`, a
+  missing or empty list, or a failing `git`, the rung fails. The file is shared: the Go realm keeps a
+  byte-for-byte copy, and `check-repos.sh --check shared` fails when they differ. The Containerfile bakes it
+  with the folder into `/opt/ygg/checks`. The rungs still run the tool configs baked beside the scripts, not
+  the leaf's.
 - `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
   and Query, a typed client for the contract, a tested component and a Playwright spec.
 
@@ -86,7 +98,9 @@ has the required check `test` too. It runs in the same Node image as the `web` s
 (no `apt-get` step, no service, no Playwright) and runs `npm ci --ignore-scripts`, `lint`, `typecheck`,
 `test` and `build`. `TestTemplateCI` keeps it in step with the Containerfile and `package.json`. Every rung
 of the web ladder refuses a task's change under `.github/` (`web-protected.sh`), so only the product's people
-change the workflow. Its lint and typecheck use the leaf's own tool configs, which the ladder ignores.
+change the workflow. Its lint and typecheck use the leaf's own tool configs, which the ladder does not read but
+also does not let a task change. The `lint` script is `eslint --no-config-lookup -c eslint.config.js .`
+(`TestTemplateCI` pins it): ESLint reads the one protected config at the top and looks for no other.
 
 ## Depends on
 
