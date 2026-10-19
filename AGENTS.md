@@ -1,6 +1,6 @@
 # AGENTS.md: midgard-react
 
-The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for
+The Midgard realm's React flavor: implementer prompt, devcontainer stack layer, templates and checks for
 web frontends.
 
 Follow the Yggdrasil invariants:

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var buildPrompts = []string{"implementer.md", "reviewer-spec.md", "reviewer-simplicity.md", "reviewer-quality.md"}
+var buildPrompts = []string{"implementer.md"}
 
 func TestEveryBuildPromptIsThereAndKeepsTheBenchmarkOutOfAgentsReach(t *testing.T) {
 	sensible(t, buildPrompts)
@@ -43,25 +43,5 @@ func TestThePromptsNameOnlyScriptsAndCommandsThatExist(t *testing.T) {
 		if !strings.Contains(impl, want) {
 			t.Errorf("implementer.md lacks %q", want)
 		}
-	}
-}
-
-func TestTheReviewersSayWhatToLookAtAndHowToNameFindings(t *testing.T) {
-	for name, ids := range map[string]string{"reviewer-spec.md": "spec-1", "reviewer-simplicity.md": "simple-1", "reviewer-quality.md": "quality-1"} {
-		text := prompt(t, name)
-		for _, want := range []string{"read-only", "git merge-base HEAD main", ids, "file:line", "**blocker**"} {
-			if want == "**blocker**" && name == "reviewer-simplicity.md" {
-				want = "**Must fix**"
-			}
-			if !strings.Contains(text, want) {
-				t.Errorf("%s lacks %q", name, want)
-			}
-		}
-		if strings.Contains(text, "git commit") {
-			t.Errorf("%s talks of committing; a reviewer changes nothing", name)
-		}
-	}
-	if !strings.Contains(prompt(t, "reviewer-simplicity.md"), "The skill below") || !strings.Contains(prompt(t, "reuse-review.md"), "The skill below") {
-		t.Error("a prompt that relies on the vendored skill must say that the skill follows it")
 	}
 }

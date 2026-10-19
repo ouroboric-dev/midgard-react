@@ -1,11 +1,11 @@
-# The React flavor of the Midgard realm (change realm-leaf-naming): the lead realm of the client gallery. It
-# holds the graph of a web product (spec §4.2), the planning prompts and reviewers, and the recipe of a React
-# web leaf. A project that also needs a Go API pins helheim-go for that leaf. The check ladder is rungs 1 to
-# 5 of spec §9.5 in the task's loop, with the dependency policy (deps) beside the security rung; rung 6 is the
-# three reviewers in the graph; the acceptance run is the pointer move's, and rung 7 is the grader's.
+# The React flavor of the Midgard realm (change realm-leaf-naming): the realm of a React web leaf in the client
+# gallery. It holds the recipe of that leaf (delta §9.4): the implementer prompt, the web template, the check
+# ladder, the stacks and the acceptance check. The graph and the stage prompts are Voluspa's `software` graph.
+# A project that also needs a Go API pins helheim-go for that leaf. The check ladder is rungs 1 to 5 of spec
+# §9.5 in the task's loop, with the dependency policy (deps) beside the security rung; rung 6 is the three
+# reviewers in the graph; the acceptance run is the pointer move's, and rung 7 is the grader's.
 name: midgard-react
 version: 0.1.0
-graph: graph.yaml
 checks:
   static: [/opt/ygg/checks/web-static.sh]
   unit: [/opt/ygg/checks/web-unit.sh]

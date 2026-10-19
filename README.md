@@ -1,6 +1,6 @@
 # midgard-react
 
-The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for
+The Midgard realm's React flavor: implementer prompt, devcontainer stack layer, templates and checks for
 web frontends.
 
 Part of [Yggdrasil](https://github.com/ouroboric-dev/yggdrasil), the agentic factory by
@@ -18,10 +18,9 @@ The required check `test` runs `gofmt`, `go vet`, `go test -race` as a non-root 
 
 ## What it holds
 
-The lead realm of a web product for the factory: the graph from a brief to a merged, accepted product, the
-prompts of each stage, a stack image with the check ladder's tools, the ladder's scripts and the web app
-template. A run loads it by name from the realm store (`--realm midgard-react`). See
-[the architecture](docs/architecture.md).
+The realm of a React web leaf: the implementer prompt, a stack image with the check ladder's tools, the
+ladder's scripts and the web app template. A project pins it for its web leaf. The graph and the stage
+prompts are Voluspa's `software` graph. See [the architecture](docs/architecture.md).
 
 ## Docs
 

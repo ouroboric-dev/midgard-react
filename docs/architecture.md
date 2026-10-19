@@ -8,7 +8,7 @@ style: reference
 
 # midgard-react architecture
 
-The Midgard realm's React flavor: graph, prompts, devcontainer stack layer, templates and checks for
+The Midgard realm's React flavor: implementer prompt, devcontainer stack layer, templates and checks for
 web frontends.
 
 Midgard is the realm of web frontends, and this is its React flavor (realm leaf naming, Yggdrasil
@@ -19,8 +19,9 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - Holds the recipe of a React web leaf (spec §9, as changed by realm leaf naming): the `implementer`
   prompt, the React devcontainer stack layer, the web leaf template and its checks, under the role
   names every build realm shares.
-- Is the client gallery's lead realm: it holds the graph (`graph.yaml`, spec §4.2) and the prompts not
-  tied to one leaf (planner, initializer, reviewers). The api leaf's recipe is `helheim-go`'s.
+- Holds no graph and no stage prompt. Voluspa's `software` graph holds the stages (spec §4.2) and the
+  prompts of the planners and the reviewers; this realm is a flavor that a project's leaf pins. The api
+  leaf's recipe is `helheim-go`'s.
 - Its templates are copied into products, so they are MIT-licensed (`templates/`).
 
 ## What is here
@@ -28,14 +29,8 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - `pack.yaml`: the leaf recipe (template, implementer prompt, the ladder by name), the check scripts, and
   the sandbox: two images built from `devcontainer/`, the leaf's stack (`web`) and the one for acceptance
   checks (`acceptance`, with Go).
-- `graph.yaml`: the stages of a web product (spec §4.2). The planning stages run in scratch workspaces and
-  Odin publishes their documents after the approval points; a design-conformance reviewer checks the spec
-  against the design and the spec gate stops on a deviation; a reuse review reads the plan; the plan is read
-  into tasks and the leaves are created from their realms' templates. Then, for every task: the implementer
-  in a loop with the check ladder and three reviewers (spec compliance, simplicity, quality), the merge
-  gate, the `pointer-contract` gate and the pointer move with the acceptance run.
-- `prompts/`: planner, conformance, reuse-review, implementer and reviewer prompts. A planner prompt tells
-  where its documents go; a test checks the examples in them against the schemas Odin reads.
+- `prompts/implementer.md`: the implementer prompt, the only prompt here. The graph's other prompts are
+  Voluspa's.
 - `devcontainer/Containerfile` and `devcontainer/checks/`: the stack and the ladder's scripts. `web-static`,
   `web-unit`, `web-tdd` (new tests fail on the commit the task started from), `web-contract`, `web-deps` (the
   dependency policy of `config/deps-policy.json`: pinned minor lines, minimum patched versions, then the
@@ -63,26 +58,15 @@ change proposal `2026-10-17-realm-leaf-naming`).
 
 ## Routing
 
-Odin keeps two indexes of a project (spec §8). The wiring block of `REPOS.md` says who consumes, requires or
-pins what. `.ygg/impact.json` says what a change to a leaf, a contract or a package reaches. Odin builds both
-from the umbrella, the packs, `go.mod`, `package.json`, the lockfiles, Go imports and OpenAPI files. It calls no
-model. Every edge is `extracted` (read from a file) or `inferred` (a guess).
-
-- The `move` node lists both files in `generated`. At each move Odin rebuilds them and logs
-  `routing_index_built`. The shrink guard refuses an index that kept under half of its edges.
-- The `contract-gate` node judges the move after it. A move that changes an OpenAPI file is judged by
-  `extracted` edges of the shipped impact index, or by `oasdiff`. If the only evidence is an `inferred` edge,
-  the verdict is `escalate` and a person decides in every mode. The ledger records `pointer_contract_checked`.
-- A contract file is a file whose name ends in `openapi.yaml` or `openapi.yml`. The web template keeps its copy
-  of the API contract in `contracts/api.openapi.yaml`. A byte-identical copy is an `extracted` edge. A copy
-  with the same title and other bytes is `inferred`. Keep the copy current, or the gate escalates.
-- The pack sets no `routing` block. A project that wants its indexes measured adds `.ygg/routing-bench.yaml` to
-  its umbrella (questions with known answers, scored right first with no model) and a `routing:` block with a
-  `threshold` to the pack. Odin then ships an index only at or above the threshold.
+The `software` graph (Voluspa) runs the `contract-gate` before the pointer move and ships the routing indexes
+(spec §8). A contract file is a file whose name ends in `openapi.yaml` or `openapi.yml`. The web template keeps
+its copy of the API contract in `contracts/api.openapi.yaml`, and a test checks the name. A byte-identical copy
+of the API's contract is an `extracted` edge. A copy with the same title and other bytes is `inferred`. Keep the
+copy current, or the gate escalates. The pack sets no `routing` block.
 
 ## Tests
 
-`go test ./...` checks the pack, the graph and the prompts against Gungnir's schemas; runs the scripts on
+`go test ./...` checks the pack against Gungnir's schemas and the implementer prompt; runs the scripts on
 small leaves with stand-ins for the image's tools (and python3 for the servers); and builds the template,
 which needs the npm registry the first time (set `YGG_REQUIRE_TEMPLATES` to fail instead of skipping when
 it cannot be reached). The image and the tools in it are checked on a real engine (Phase 5b, v0-H14).
@@ -109,8 +93,8 @@ also does not let a task change. The `lint` script is `eslint --no-config-lookup
 
 - Gungnir's schemas.
 - Havamal's `ponytail-review` skill, for the reuse review and the simplicity reviewer.
-- A lead realm's graph names the roles `planner`, `implementer` and `reviewer`: the operator's
-  `factory.yaml` defines them.
+- Voluspa's `software` graph, which a run names with `--graph`. The graph's `implement` node takes this
+  realm's `implementer` prompt, template and checks from the leaf that pins it.
 
 ## Source
 
