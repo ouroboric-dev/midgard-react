@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -395,7 +396,8 @@ func TestTDDSeesAFileThatWasRenamed(t *testing.T) {
 
 // Every rung of the web ladder refuses a change to the scripts of package.json and a leaf .npmrc before it
 // installs or runs anything, so a rung run alone is protected too: a leaf .npmrc changes how npm runs the
-// scripts of the packages. The tool configs are not here: the rungs run their own baked copies.
+// scripts of the packages. The tool configs (ESLint, TypeScript, Vite, Vitest, Playwright) are refused too, by
+// TestEveryRungRefusesAChangeToAProtectedFile; the rungs run their own baked copies, not the leaf's.
 func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 	start := map[string]string{".gitignore": "node_modules/\n.npmrc.local\n", "package.json": `{"scripts": {"lint": "eslint ."}}`, "contracts/api.openapi.yaml": "x",
 		"eslint.config.js": "export default [];\n", "tsconfig.json": "{}\n", "vite.config.ts": "export default {};\n", "playwright.config.ts": "export default {};\n", "src/a.ts": "export const a = 1;\n"}
@@ -835,7 +837,7 @@ var webProtected = []string{":(glob)**/.npmrc", ":(glob)**/eslint.config.*", ":(
 // stops a line taken out of the file from taking its cases with it.
 var commonProtected = []string{".github/", ".devcontainer/", ".pre-commit-config.yaml", ":(glob)**/.markdownlint*",
 	":(glob)**/.yamllint", ":(glob)**/.yamllint.yaml", ":(glob)**/.yamllint.yml", ":(glob)**/.shellcheckrc",
-	":(glob)**/.gitleaks.toml", ":(glob)**/.gitleaksignore", ":(glob)**/REUSE.toml", ".reuse/", "LICENSES/", "LICENSE",
+	":(glob)**/shellcheckrc", ":(glob)**/.gitleaks.toml", ":(glob)**/.gitleaksignore", ":(glob)**/REUSE.toml", ".reuse/", "LICENSES/", "LICENSE",
 	":(glob)**/*.license"}
 
 // protectedSpecs returns the pathspecs of devcontainer/checks/protected-common, comments and blank lines taken out,
@@ -955,7 +957,100 @@ func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
 			}
 		}
 	}
-	// The node_modules exclusion belongs to the glob entries only: a root-anchored folder is protected whatever it holds.
+	// A root folder added as a symlink is refused, committed or not: a pathspec with a trailing slash matches a folder only.
+	// The root .npmrc matches a folder of that name too, as the plain pathspec always did.
+	for _, rung := range rungs {
+		for _, spec := range protectedSpecs(t) {
+			name, ok := strings.CutSuffix(spec, "/")
+			if !ok {
+				continue
+			}
+			for _, committed := range []bool{true, false} {
+				t.Run(rung+" "+name+" added as a symlink, committed "+strconv.FormatBool(committed), func(t *testing.T) {
+					t.Parallel()
+					dir := repo(t, protectedStart)
+					git(t, dir, "switch", "-q", "-c", "work")
+					if err := os.Symlink("docs/r", filepath.Join(dir, name)); err != nil {
+						t.Fatal(err)
+					}
+					if committed {
+						git(t, dir, "add", "--", name)
+						git(t, dir, "commit", "-q", "-m", "work")
+					}
+					bin := t.TempDir()
+					webTools(t, bin, webToolStubs)
+					code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+					if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, "\n  "+name+"\n") || calls(bin) != "" {
+						t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+					}
+				})
+			}
+			for _, near := range []string{name + "x", name + "x/a"} {
+				t.Run(rung+" "+near+" passes", func(t *testing.T) {
+					t.Parallel()
+					dir := repo(t, protectedStart)
+					git(t, dir, "switch", "-q", "-c", "work")
+					put(t, dir, map[string]string{near: "x\n"})
+					git(t, dir, "add", "--", near)
+					git(t, dir, "commit", "-q", "-m", "work")
+					bin := t.TempDir()
+					webTools(t, bin, webToolStubs)
+					if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); strings.Contains(out, refusal) || strings.Contains(out, "protected:") || !wentOn(out, bin) {
+						t.Errorf("a file a task may add was refused, or the rung did not go on: exit %d, calls %q\n%s", code, calls(bin), out)
+					}
+				})
+			}
+		}
+		t.Run(rung+" .npmrc/x refused", func(t *testing.T) {
+			t.Parallel()
+			dir := repo(t, protectedStart)
+			git(t, dir, "switch", "-q", "-c", "work")
+			put(t, dir, map[string]string{".npmrc/x": "x\n"})
+			git(t, dir, "add", "--", ".npmrc/x")
+			git(t, dir, "commit", "-q", "-m", "work")
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, ".npmrc/x") || calls(bin) != "" {
+				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+			}
+		})
+		// Every refused path is listed, each indented.
+		t.Run(rung+" every path is indented", func(t *testing.T) {
+			t.Parallel()
+			dir := repo(t, protectedStart)
+			git(t, dir, "switch", "-q", "-c", "work")
+			put(t, dir, map[string]string{".pre-commit-config.yaml": "x\n", "LICENSE": "x\n", "sub/.yamllint": "x\n"})
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			for _, path := range []string{".pre-commit-config.yaml", "LICENSE", "sub/.yamllint"} {
+				if code == 0 || !strings.Contains(out, "\n  "+path+"\n") {
+					t.Errorf("%s not listed indented: exit %d\n%s", path, code, out)
+				}
+			}
+		})
+	}
+	// The node_modules exclusion belongs to the untracked listing of the glob entries only: a root-anchored folder is
+	// protected whatever it holds, and a tracked (force-added) file under node_modules is a change.
+	for _, rung := range rungs {
+		for _, path := range []string{"scripts/node_modules/.shellcheckrc", "scripts/node_modules/shellcheckrc", "src/node_modules/tsconfig.json", "pkg/node_modules/.npmrc"} {
+			t.Run(rung+" "+path+" committed is refused", func(t *testing.T) {
+				t.Parallel()
+				dir := repo(t, protectedStart)
+				git(t, dir, "switch", "-q", "-c", "work")
+				put(t, dir, map[string]string{path: "x\n"})
+				git(t, dir, "add", "-f", "--", path)
+				git(t, dir, "commit", "-q", "-m", "work")
+				bin := t.TempDir()
+				webTools(t, bin, webToolStubs)
+				code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+				if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, path) || calls(bin) != "" {
+					t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+				}
+			})
+		}
+	}
 	for _, rung := range rungs {
 		for _, path := range []string{".github/actions/a/node_modules/dep/index.js", ".devcontainer/node_modules/x", ".reuse/node_modules/x", "LICENSES/node_modules/x"} {
 			t.Run(rung+" "+path+" refused", func(t *testing.T) {
@@ -983,8 +1078,10 @@ func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
 				dir := repo(t, protectedStart)
 				git(t, dir, "switch", "-q", "-c", "work")
 				put(t, dir, map[string]string{path: "x\n"})
-				git(t, dir, "add", "-f", "--", path)
-				git(t, dir, "commit", "-q", "-m", "work")
+				if !strings.HasPrefix(path, "node_modules/") { // an installed package is ignored and untracked; a tracked file there is refused
+					git(t, dir, "add", "-f", "--", path)
+					git(t, dir, "commit", "-q", "-m", "work")
+				}
 				put(t, dir, map[string]string{"node_modules/pkg/tsconfig.json": "{}\n", "node_modules/pkg/.eslintrc.json": "{}\n", "node_modules/pkg/LICENSE": "x\n", "node_modules/pkg/x.license": "x\n", "node_modules/pkg/eslint.config.js": "x\n", "node_modules/pkg/.npmrc": "x\n"})
 				bin := t.TempDir()
 				webTools(t, bin, webToolStubs)
@@ -1010,6 +1107,36 @@ func TestEveryRungFailsClosedWithoutMainOrList(t *testing.T) {
 			webTools(t, bin, webToolStubs)
 			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
 			if code == 0 || !strings.Contains(out, "main") || calls(bin) != "" {
+				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+			}
+		})
+		t.Run(rung+" a tag called main and no branch", func(t *testing.T) {
+			t.Parallel()
+			dir := leaf(t, protectedStart)
+			git(t, dir, "init", "-q", "-b", "trunk")
+			git(t, dir, "add", "-A")
+			git(t, dir, "commit", "-q", "-m", "start")
+			git(t, dir, "tag", "main", "HEAD")
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			if code == 0 || !strings.Contains(out, "has no main") || calls(bin) != "" {
+				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+			}
+		})
+		// git resolves a tag before a branch: a tag main at HEAD must not hide the task's changes.
+		t.Run(rung+" a tag called main at HEAD", func(t *testing.T) {
+			t.Parallel()
+			dir := repo(t, protectedStart)
+			git(t, dir, "switch", "-q", "-c", "work")
+			put(t, dir, map[string]string{".pre-commit-config.yaml": "x\n"})
+			git(t, dir, "add", "--", ".pre-commit-config.yaml")
+			git(t, dir, "commit", "-q", "-m", "work")
+			git(t, dir, "tag", "main", "HEAD")
+			bin := t.TempDir()
+			webTools(t, bin, webToolStubs)
+			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
+			if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, ".pre-commit-config.yaml") || calls(bin) != "" {
 				t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
 			}
 		})

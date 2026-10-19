@@ -37,7 +37,7 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - **Do not change the files that configure the checks.** They are `.github/`, `.devcontainer/`,
   `.pre-commit-config.yaml`, `.npmrc`, `eslint.config.*`, `.eslintrc*`, `tsconfig*.json`, `vite.config.*`,
   `vitest.config.*`, `vitest.workspace.*`, `playwright.config.*`, `.markdownlint*`, `.yamllint*`,
-  `.shellcheckrc`, `.gitleaks*`, `REUSE.toml`, `.reuse/`, `LICENSES/`, `LICENSE` and `*.license`, and the
+  `.shellcheckrc`, `shellcheckrc`, `.gitleaks*`, `REUSE.toml`, `.reuse/`, `LICENSES/`, `LICENSE` and `*.license`, and the
   scripts in `package.json`. The factory refuses a task that adds, changes, deletes or links one. If a check
   is wrong, say so in your report; do not edit the file.
 

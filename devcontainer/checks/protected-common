@@ -8,6 +8,7 @@
 :(glob)**/.yamllint.yaml
 :(glob)**/.yamllint.yml
 :(glob)**/.shellcheckrc
+:(glob)**/shellcheckrc
 :(glob)**/.gitleaks.toml
 :(glob)**/.gitleaksignore
 :(glob)**/REUSE.toml
