@@ -3,12 +3,14 @@
 # The tool configs (ESLint, TypeScript, Vite, Vitest, Playwright) are not checked here: the rungs run copies
 # baked into the image and never read the leaf's (web-configs.sh). What is left is what the baked configs do
 # not cover: the scripts of package.json, which npm runs, and a leaf .npmrc, which changes how npm runs the
-# scripts of the packages. The dependency list of package.json may change. The task's diff is the working
-# tree against the commit the task started from (main). Run in the leaf's top folder.
+# scripts of the packages. The dependency list of package.json may change. Two folders only the product's
+# people change, as on the Go ladder (go-static.sh): .devcontainer/, which a person's editor runs, and
+# .github/, the product's own CI. The task's diff is the working tree against the commit the task started
+# from (main). Run in the leaf's top folder.
 set -euo pipefail
 base="$(git merge-base HEAD main)" || { echo "protected: this leaf has no main to compare with"; exit 1; }
 echo "== protected files"
-files=('.npmrc' '.github/')
+files=('.npmrc' '.devcontainer/' '.github/')
 # Added, changed, deleted or renamed since the task started, and files git has not seen yet, ignored ones too.
 changed="$(git diff --no-renames --name-only "$base" -- "${files[@]}")"
 untracked="$(git ls-files --others -- "${files[@]}")"
