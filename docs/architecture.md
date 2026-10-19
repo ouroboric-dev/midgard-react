@@ -58,8 +58,7 @@ change proposal `2026-10-17-realm-leaf-naming`).
 
 ## Routing
 
-The `software` graph (Voluspa) runs the `contract-gate` before the pointer move and ships the routing indexes
-(spec §8). A contract file is a file whose name ends in `openapi.yaml` or `openapi.yml`. The web template keeps
+Voluspa's graph ships the routing indexes (spec §8). A contract file is a file whose name ends in `openapi.yaml` or `openapi.yml`. The web template keeps
 its copy of the API contract in `contracts/api.openapi.yaml`, and a test checks the name. A byte-identical copy
 of the API's contract is an `extracted` edge. A copy with the same title and other bytes is `inferred`. Keep the
 copy current, or the gate escalates. The pack sets no `routing` block.

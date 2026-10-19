@@ -60,6 +60,9 @@ func TestThePackLoadsAsAFlavorWithTwoStacksFromOneContext(t *testing.T) {
 	if _, ok := p.Checks["accept"]; !ok || p.Sandbox.Acceptance.Target == "" {
 		t.Error("the pack defines no accept check or no acceptance stack; the pointer move runs them")
 	}
+	if p.Routing != nil {
+		t.Errorf("routing = %+v; the graph pack's routing block is the one a move measures, so a realm sets none", p.Routing)
+	}
 	want := []string{"static", "unit", "tdd", "contract", "deps", "security", "e2e"}
 	if strings.Join(p.Leaf.Checks, ",") != strings.Join(want, ",") {
 		t.Errorf("the ladder is %v, want %v: cheap rungs first, the browser last", p.Leaf.Checks, want)
