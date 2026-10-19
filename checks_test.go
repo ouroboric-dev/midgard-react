@@ -249,7 +249,7 @@ func TestStaticRefusesAChangeToWhatIsNotAToolConfigButTheChecksRelyOn(t *testing
 			}
 			continue
 		}
-		if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, c.fails) || calls(bin) != "" {
+		if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, c.fails) || calls(bin) != "" {
 			t.Errorf("%s: exit %d, calls %q, want a refusal naming %s\n%s", c.name, code, calls(bin), c.fails, out)
 		}
 	}
@@ -413,7 +413,7 @@ func TestEveryWebRungRefusesAChangeToTheScriptsAndNpmrc(t *testing.T) {
 			bin := t.TempDir()
 			webTools(t, bin, tools)
 			code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
-			if code == 0 || !strings.Contains(out, "protected") || calls(bin) != "" {
+			if code == 0 || !strings.Contains(out, refusal) || calls(bin) != "" {
 				t.Errorf("%s with %s: exit %d, calls %q\n%s", rung, name, code, calls(bin), out)
 			}
 		}
@@ -737,7 +737,7 @@ func TestRealRungsIgnoreAnyConfigTheLeafHas(t *testing.T) {
 		dir := realLeafOn(t, nil, [2]string{}, files)
 		code, out := script(t, dir, "", "web-static.sh")
 		skipOffline(t, out)
-		if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, "eslint.config.js") || strings.Contains(out, "no-unused-vars") {
+		if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, "eslint.config.js") || strings.Contains(out, "no-unused-vars") {
 			t.Errorf("exit %d, want a refusal naming eslint.config.js\n%s", code, out)
 		}
 	})
@@ -790,7 +790,7 @@ func TestEveryRungRefusesADevContainerOrWorkflowChange(t *testing.T) {
 				if c.name == "another file beside it" {
 					want = p.other
 				}
-				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, want) || calls(bin) != "" {
+				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, want) || calls(bin) != "" {
 					t.Errorf("%s with %s %s: exit %d, calls %q\n%s", rung, p.file, c.name, code, calls(bin), out)
 				}
 			}
@@ -815,6 +815,16 @@ func packRungs(t *testing.T) []string {
 		t.Fatalf("the ladder is %v", rungs)
 	}
 	return rungs
+}
+
+// refusal is what the protected step prints when it refuses a task, and only then (the header "== protected
+// files" is always printed).
+const refusal = "this task changes files the checks rely on"
+
+// wentOn says that a rung passed its protected step and carried on: it installed (npm ci), or for web-deps
+// printed the policy header that comes before its install.
+func wentOn(out string, bin string) bool {
+	return strings.Contains(calls(bin), "npm ci") || strings.Contains(out, "== dependency policy")
 }
 
 // webProtected are the names the web realm adds to the shared list (protected-common).
@@ -937,7 +947,7 @@ func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
 						bin := t.TempDir()
 						webTools(t, bin, webToolStubs)
 						code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
-						if code == 0 || !strings.Contains(out, "protected") || !strings.Contains(out, path) || calls(bin) != "" {
+						if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, path) || calls(bin) != "" {
 							t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
 						}
 					})
@@ -958,7 +968,7 @@ func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
 				bin := t.TempDir()
 				webTools(t, bin, webToolStubs)
 				code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1")
-				if code == 0 || !strings.Contains(out, path) || calls(bin) != "" {
+				if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, path) || calls(bin) != "" {
 					t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
 				}
 			})
@@ -978,8 +988,8 @@ func TestEveryRungRefusesAChangeToAProtectedFile(t *testing.T) {
 				put(t, dir, map[string]string{"node_modules/pkg/tsconfig.json": "{}\n", "node_modules/pkg/.eslintrc.json": "{}\n", "node_modules/pkg/LICENSE": "x\n", "node_modules/pkg/x.license": "x\n", "node_modules/pkg/eslint.config.js": "x\n", "node_modules/pkg/.npmrc": "x\n"})
 				bin := t.TempDir()
 				webTools(t, bin, webToolStubs)
-				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); strings.Contains(out, "this task changes files") {
-					t.Errorf("a file a task may add was refused: exit %d\n%s", code, out)
+				if code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1"); strings.Contains(out, refusal) || strings.Contains(out, "protected:") || !wentOn(out, bin) {
+					t.Errorf("a file a task may add was refused, or the rung did not go on: exit %d, calls %q\n%s", code, calls(bin), out)
 				}
 			})
 		}
