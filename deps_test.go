@@ -37,8 +37,8 @@ func depsLeaf(t *testing.T, deps string, pkgs map[string]string) string {
 }
 
 func TestDepsPassesACleanLeafAndRunsTheAuditsThePolicyNames(t *testing.T) {
-	dir := depsLeaf(t, `"dependencies":{"react":"19.3.0"},"devDependencies":{"vite":"~8.3.2","vitest":"5.0.3"}`,
-		map[string]string{"node_modules/react": "19.3.0", "node_modules/vite": "8.3.2", "node_modules/vitest": "5.0.3"})
+	dir := depsLeaf(t, `"dependencies":{"react":"19.3.0"},"devDependencies":{"vite":"~8.3.4","vitest":"5.0.3"}`,
+		map[string]string{"node_modules/react": "19.3.0", "node_modules/vite": "8.3.4", "node_modules/vitest": "5.0.3"})
 	bin := stubs(t, "osv-scanner")
 	webTools(t, bin, nil)
 	code, out := script(t, dir, bin, "web-deps.sh")
@@ -70,10 +70,10 @@ func TestDepsRefusesWhatIsNotPinnedToAMinorLineAndWhatIsBelowTheMinimum(t *testi
 		{"a file path", `"devDependencies":{"evil":"file:../evil"}`, nil, "evil file:../evil is not pinned"},
 		{"an alias", `"dependencies":{"react":"npm:other@1.2.3"}`, nil, "react npm:other@1.2.3 is not pinned"},
 		{"an optional dependency", `"optionalDependencies":{"fsevents":"^2.3.0"}`, nil, "fsevents ^2.3.0 is not pinned"},
-		{"vite below the minimum", `"devDependencies":{"vite":"8.3.1"}`, map[string]string{"node_modules/vite": "8.3.1"}, "vite 8.3.1 is below the minimum 8.3.2"},
-		{"vite far below, a major", `"devDependencies":{"vite":"7.9.9"}`, map[string]string{"node_modules/vite": "7.9.9"}, "vite 7.9.9 is below the minimum 8.3.2"},
-		{"a copy of vite nested in another package", `"dependencies":{"react":"19.3.0"}`, map[string]string{"node_modules/vite": "8.3.2", "node_modules/x/node_modules/vite": "8.0.0"}, "node_modules/x/node_modules/vite 8.0.0 is below the minimum 8.3.2"},
-		{"a scoped name is matched by its last parts", `"dependencies":{"react":"19.3.0"}`, map[string]string{"node_modules/vite": "8.3.2", "node_modules/@s/vite": "1.0.0"}, ""},
+		{"vite below the minimum", `"devDependencies":{"vite":"8.3.3"}`, map[string]string{"node_modules/vite": "8.3.3"}, "vite 8.3.3 is below the minimum 8.3.4"},
+		{"vite far below, a major", `"devDependencies":{"vite":"7.9.9"}`, map[string]string{"node_modules/vite": "7.9.9"}, "vite 7.9.9 is below the minimum 8.3.4"},
+		{"a copy of vite nested in another package", `"dependencies":{"react":"19.3.0"}`, map[string]string{"node_modules/vite": "8.3.4", "node_modules/x/node_modules/vite": "8.0.0"}, "node_modules/x/node_modules/vite 8.0.0 is below the minimum 8.3.4"},
+		{"a scoped name is matched by its last parts", `"dependencies":{"react":"19.3.0"}`, map[string]string{"node_modules/vite": "8.3.4", "node_modules/@s/vite": "1.0.0"}, ""},
 	}
 	for _, c := range cases {
 		dir := depsLeaf(t, c.deps, c.pkgs)
@@ -113,7 +113,7 @@ func TestDepsNeedsALockFileAndNeverReadsAPolicyOfTheLeaf(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("a leaf with its own policy passed:\n%s", out)
 	}
-	for _, want := range []string{"react ^19.3.0 is not pinned", "vite 8.0.0 is below the minimum 8.3.2", "2 problem(s)"} {
+	for _, want := range []string{"react ^19.3.0 is not pinned", "vite 8.0.0 is below the minimum 8.3.4", "2 problem(s)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the output lacks %q:\n%s", want, out)
 		}
@@ -166,7 +166,7 @@ func TestTheBakedDepsPolicyIsValidAndTheRungReadsItFromBesideItself(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"schema":"ygg.deps/v1"`, `"pin":"minor"`, `"vite":"8.3.2"`, `"npm-audit"`, `"osv"`} {
+	for _, want := range []string{`"schema":"ygg.deps/v1"`, `"pin":"minor"`, `"vite":"8.3.4"`, `"npm-audit"`, `"osv"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("the baked policy lacks %s", want)
 		}
@@ -181,13 +181,13 @@ func TestTheBakedDepsPolicyIsValidAndTheRungReadsItFromBesideItself(t *testing.T
 // checker cannot read in full is refused (fix round 1, three ways past a check that read only package-lock.json).
 
 func TestDepsReadsTheInstalledVersionNotOnlyTheLock(t *testing.T) {
-	// the lock says 8.3.2, but its tarball is the old one: npm ci installs vite 7.0.0
-	dir := depsLeaf(t, `"devDependencies":{"vite":"8.3.2"}`, map[string]string{"node_modules/vite": "8.3.2"})
+	// the lock says 8.3.4, but its tarball is the old one: npm ci installs vite 7.0.0
+	dir := depsLeaf(t, `"devDependencies":{"vite":"8.3.4"}`, map[string]string{"node_modules/vite": "8.3.4"})
 	bin := stubs(t, "osv-scanner")
 	stub(t, bin, "npm", "echo \"npm $*\" >> \""+bin+"/calls.log\"\nif [ \"$1\" = ci ]; then\nrm -rf node_modules\nmkdir -p node_modules/vite node_modules/a/node_modules/vite\n"+
 		"echo '{\"name\":\"vite\",\"version\":\"7.0.0\"}' > node_modules/vite/package.json\necho '{\"name\":\"vite\",\"version\":\"8.4.0\"}' > node_modules/a/node_modules/vite/package.json\nfi\n")
 	code, out := script(t, dir, bin, "web-deps.sh")
-	if code == 0 || !strings.Contains(out, "node_modules/vite 7.0.0 is installed, below the minimum 8.3.2") {
+	if code == 0 || !strings.Contains(out, "node_modules/vite 7.0.0 is installed, below the minimum 8.3.4") {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	if strings.Contains(calls(bin), "npm audit") || strings.Contains(calls(bin), "osv-scanner") {
@@ -216,8 +216,8 @@ func TestDepsRefusesALockFileTheCheckerCannotReadInFull(t *testing.T) {
 
 func TestDepsRefusesAShrinkwrap(t *testing.T) {
 	// npm ci reads npm-shrinkwrap.json in place of package-lock.json, and nothing protects it
-	dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "package.json": pkgJSON(`"devDependencies":{"vite":"8.3.2"}`),
-		"package-lock.json": lock(t, map[string]string{"node_modules/vite": "8.3.2"}), "npm-shrinkwrap.json": lock(t, map[string]string{"node_modules/vite": "7.0.0"})})
+	dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "package.json": pkgJSON(`"devDependencies":{"vite":"8.3.4"}`),
+		"package-lock.json": lock(t, map[string]string{"node_modules/vite": "8.3.4"}), "npm-shrinkwrap.json": lock(t, map[string]string{"node_modules/vite": "7.0.0"})})
 	bin := stubs(t, "osv-scanner")
 	webTools(t, bin, nil)
 	code, out := script(t, dir, bin, "web-deps.sh")

@@ -1,1 +1,1 @@
-{"schema":"ygg.deps/v1","pin":"minor","minimum":{"vite":"8.3.2"},"audit":["npm-audit","osv"]}
+{"schema":"ygg.deps/v1","pin":"minor","minimum":{"vite":"8.3.4"},"audit":["npm-audit","osv"]}
