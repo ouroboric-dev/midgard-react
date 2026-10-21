@@ -20,7 +20,7 @@ if ! diff -q "$tmp/schema.d.ts" src/api/schema.d.ts >/dev/null; then
   exit 1
 fi
 echo "== changes of the contract since the task started"
-base="$(git merge-base HEAD main)" || { echo "contract: this leaf has no main to compare with"; exit 1; }
+base="$(git merge-base HEAD refs/heads/main)" || { echo "contract: this leaf has no main to compare with"; exit 1; }
 if git cat-file -e "$base:$c" 2>/dev/null; then
   git show "$base:$c" > "$tmp/old.yaml"
   if [ "$(oasdiff breaking "$tmp/old.yaml" "$c" --format json)" = "[]" ]; then

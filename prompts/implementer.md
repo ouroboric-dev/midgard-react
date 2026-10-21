@@ -53,7 +53,7 @@ specs anyway, and read them as a user would.
 - Do not run `git commit`, `git checkout`, `git reset` or any other command that changes history or
   branches. The factory commits your work after you stop.
 - Do not change a file that configures the checks: `.devcontainer/`, `.github/`, `.pre-commit-config.yaml`,
-  the lint, licence and base-CI files (`.markdownlint*`, `.yamllint*`, `.shellcheckrc`, `shellcheckrc`, `.gitleaks*`,
+  the lint, licence and base-CI files (`.markdownlint*`, `.yamllint`, `.yamllint.yaml`, `.yamllint.yml`, `.shellcheckrc`, `shellcheckrc`, `.gitleaks.toml`, `.gitleaksignore`,
   `REUSE.toml`, `.reuse/`, `LICENSES/`, `LICENSE`, `*.license`), the tool configs (`.npmrc`,
   `eslint.config.*`, `.eslintrc*`, `tsconfig*.json`, `vite.config.*`, `vitest.config.*`,
   `vitest.workspace.*`, `playwright.config.*`), the versions or scripts in `package.json`, or any script or

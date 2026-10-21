@@ -1217,3 +1217,95 @@ func copyChecks(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
+
+// A tag called main (a task can create one) at the task's HEAD must not hide the task's change from the
+// rungs that read its base: git resolves a tag before a branch, so a plain main would give them HEAD itself.
+func TestTDDAndContractFindTheBaseOnTheBranchMainNotATag(t *testing.T) {
+	start := map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n", "src/a.test.ts": "// test\n",
+		"contracts/api.openapi.yaml": "openapi: 3.1.0\n", "src/api/schema.d.ts": "types\n"}
+	t.Run("tdd", func(t *testing.T) {
+		dir := repo(t, start)
+		work(t, dir, map[string]string{"src/lib/greet.ts": "export const greet = 1;\n"})
+		git(t, dir, "tag", "main", "HEAD")
+		bin := t.TempDir()
+		webTools(t, bin, map[string]string{"vitest": ""})
+		code, out := script(t, dir, bin, "web-tdd.sh")
+		if code == 0 || !strings.Contains(out, "changed without a new or changed unit test") {
+			t.Errorf("app code with no test passed behind a tag main: exit %d\n%s", code, out)
+		}
+	})
+	t.Run("contract", func(t *testing.T) {
+		dir := repo(t, start)
+		work(t, dir, map[string]string{"contracts/api.openapi.yaml": "openapi: 3.1.0\ninfo: {}\n"})
+		git(t, dir, "tag", "main", "HEAD")
+		bin := stubs(t, "vacuum")
+		// oasdiff finds a breaking change when the two contracts it is given differ.
+		stub(t, bin, "oasdiff", "if cmp -s \"$2\" \"$3\"; then echo '[]'; else echo '[{\"id\":\"x\"}]'; fi\n")
+		webTools(t, bin, map[string]string{"openapi-typescript": "out=\"\"; while [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=\"$2\"; shift; done\nprintf '%s\\n' types > \"$out\"\n"})
+		code, out := script(t, dir, bin, "web-contract.sh")
+		if !strings.Contains(out, "BREAKING") {
+			t.Errorf("the contract change was not seen behind a tag main: exit %d\n%s", code, out)
+		}
+	})
+}
+
+// The git pathspec variables of the environment must not change what the rungs match (B-091).
+func TestEveryRungRefusesAProtectedChangeWithGitPathspecVariablesSet(t *testing.T) {
+	for _, rung := range packRungs(t) {
+		for _, env := range []string{"GIT_LITERAL_PATHSPECS=1", "GIT_GLOB_PATHSPECS=1", "GIT_NOGLOB_PATHSPECS=1", "GIT_ICASE_PATHSPECS=1"} {
+			t.Run(rung+" "+env, func(t *testing.T) {
+				t.Parallel()
+				dir := repo(t, protectedStart)
+				git(t, dir, "switch", "-q", "-c", "work")
+				put(t, dir, map[string]string{".yamllint": "x\n", "a/b/.shellcheckrc": "x\n"})
+				git(t, dir, "add", "--", ".yamllint", "a/b/.shellcheckrc")
+				git(t, dir, "commit", "-q", "-m", "work")
+				bin := t.TempDir()
+				webTools(t, bin, webToolStubs)
+				code, out := script(t, dir, bin, rung, "YGG_E2E_WAIT=1", env)
+				if code == 0 || !strings.Contains(out, refusal) || !strings.Contains(out, "\n  .yamllint\n") || !strings.Contains(out, "a/b/.shellcheckrc") || calls(bin) != "" {
+					t.Errorf("exit %d, calls %q\n%s", code, calls(bin), out)
+				}
+			})
+		}
+	}
+}
+
+// web-tdd.sh reads the task's app files with pathspecs of its own; GIT_LITERAL_PATHSPECS must not blind it.
+func TestTDDSeesTheChangeWithGitLiteralPathspecs(t *testing.T) {
+	dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n", "src/a.test.ts": "// test\n"})
+	work(t, dir, map[string]string{"src/lib/greet.ts": "export const greet = 1;\n"})
+	bin := t.TempDir()
+	webTools(t, bin, map[string]string{"vitest": ""})
+	code, out := script(t, dir, bin, "web-tdd.sh", "GIT_LITERAL_PATHSPECS=1")
+	if code == 0 || !strings.Contains(out, "changed without a new or changed unit test") {
+		t.Errorf("app code with no test passed under GIT_LITERAL_PATHSPECS: exit %d\n%s", code, out)
+	}
+}
+
+// A main with no package.json must fail the rung with a message, not silently under pipefail (B-092).
+func TestProtectedSaysSoWhenMainHasNoPackageJSON(t *testing.T) {
+	dir := repo(t, map[string]string{".gitignore": "node_modules/\n", "src/a.ts": "export const a = 1;\n"})
+	work(t, dir, map[string]string{"package.json": "{}"})
+	code, out := script(t, dir, "", "web-protected.sh")
+	if code == 0 || !strings.Contains(out, "package.json") || !strings.Contains(out, "protected:") {
+		t.Errorf("exit %d, want a refusal that names package.json\n%s", code, out)
+	}
+}
+
+// git ls-files failing alone, with git diff working, fails the rung (B-092). A pathspec git cannot parse
+// reaches only ls-files here: an unreadable index entry is not needed, the stub below fails that one command.
+func TestProtectedFailsWhenOnlyLsFilesFails(t *testing.T) {
+	dir := repo(t, protectedStart)
+	git(t, dir, "switch", "-q", "-c", "work")
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	stub(t, bin, "git", "[ \"$1\" = ls-files ] && exit 128\nexec "+real+" \"$@\"\n")
+	code, out := script(t, dir, bin, "web-protected.sh")
+	if code == 0 || !strings.Contains(out, "git failed") || !strings.Contains(out, "ls-files") {
+		t.Errorf("exit %d\n%s", code, out)
+	}
+}
