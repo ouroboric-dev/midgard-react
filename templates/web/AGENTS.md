@@ -48,3 +48,5 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - `src/lib`: `api.ts` (the typed client) and helpers.
 - `src/api/schema.d.ts`: generated from the contract.
 - `contracts/`: the API contract. `e2e/`: Playwright specs.
+- `init.sh` installs the packages. `run.sh` starts the leaf: `PORT=3000 ./run.sh` builds the bundle and serves
+  it on that port. It installs nothing. Keep it working: a test starts it.

@@ -54,7 +54,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
   with the folder into `/opt/ygg/checks`. The rungs still run the tool configs baked beside the scripts, not
   the leaf's.
 - `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
-  and Query, a typed client for the contract, a tested component and a Playwright spec.
+  and Query, a typed client for the contract, a tested component and a Playwright spec. It also holds the
+  leaf run contract's `run.sh` (change proposal `2026-10-21-leaf-run-contract`): with `PORT` set it builds the
+  bundle with `npm run build` and serves it with `vite preview` on `127.0.0.1:$PORT`. It installs nothing
+  (`init.sh` does), exits non-zero with a message when `PORT` is unset or `node_modules` is missing, and is not a
+  protected file. `TestRunScriptStarts` starts it from a copy of the template and waits for the port.
 
 ## Routing
 
