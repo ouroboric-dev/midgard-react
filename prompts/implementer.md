@@ -29,6 +29,11 @@ the test that proves it.
 - **Photo bytes never pass through the API.** Uploads and downloads go to the presigned URLs the API hands out.
 - **Secrets.** Write none into code, tests, logs or docs. A test uses made-up values.
 
+## Starting the leaf
+
+`run.sh` starts this leaf: with `PORT` set it builds the bundle and serves it on that port, and it installs
+nothing (`init.sh` does that). Keep it working. Change it only when the product needs another way to start.
+
 ## Check your work before you stop
 
 Run these in the repository and fix what they say:

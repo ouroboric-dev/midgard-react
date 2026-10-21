@@ -83,7 +83,7 @@ func TestTheWebTemplateCarriesWhatARepoOfTheFactoryNeeds(t *testing.T) {
 	if n := strings.Count(read("AGENTS.md"), "\n"); n > 100 {
 		t.Errorf("AGENTS.md is %d lines; a short file that points into docs, about 100 lines (spec §4.2)", n)
 	}
-	for _, name := range []string{"init.sh", "package-lock.json", "contracts/api.openapi.yaml", "src/api/schema.d.ts", "e2e/smoke.spec.ts", "playwright.config.ts", ".gitignore"} {
+	for _, name := range []string{"init.sh", "run.sh", "package-lock.json", "contracts/api.openapi.yaml", "src/api/schema.d.ts", "e2e/smoke.spec.ts", "playwright.config.ts", ".gitignore"} {
 		read(name)
 	}
 	// Every dependency is pinned to one version: no range, no tag.
