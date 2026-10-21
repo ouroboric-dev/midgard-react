@@ -11,6 +11,9 @@
 # dependency list may change. With no main to compare to (a branch called main: a tag or any other ref of that
 # name does not count), no list, or a failing git, the rung fails: it never passes unchecked. Run in the leaf's top folder.
 set -euo pipefail
+# The git pathspec variables of the environment would change what the pathspecs below match (a literal pathspec
+# reads ":(glob)**/.yamllint" as a file name, so the match-anywhere names stop matching): git reads none of them.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
 base="$(git merge-base HEAD refs/heads/main 2>/dev/null)" || { echo "protected: this leaf has no main to compare with, so the protected files cannot be checked."; exit 1; }
 echo "== protected files"
 list="$(dirname "${BASH_SOURCE[0]}")/protected-common"
@@ -48,19 +51,16 @@ gitfail() {
 changed=""
 # The root folders go to git without their trailing slash: a pathspec with one matches a folder only, so a
 # folder added as a symlink would pass. A plain folder name matches the folder and all that is in it.
-if [ "${#roots[@]}" -gt 0 ]; then
-  changed+="$(git diff --no-renames --name-only "$base" -- "${roots[@]%/}")" || gitfail diff
-  changed+=$'\n'"$(git ls-files --others -- "${roots[@]%/}")" || gitfail ls-files
-fi
-if [ "${#globs[@]}" -gt 0 ]; then
-  changed+=$'\n'"$(git diff --no-renames --name-only "$base" -- "${globs[@]}")" || gitfail diff
-  changed+=$'\n'"$(git ls-files --others -- "${globs[@]}" ':(exclude,glob)**/node_modules/**')" || gitfail ls-files
-fi
+changed+="$(git diff --no-renames --name-only "$base" -- "${roots[@]%/}")" || gitfail diff
+changed+=$'\n'"$(git ls-files --others -- "${roots[@]%/}")" || gitfail ls-files
+changed+=$'\n'"$(git diff --no-renames --name-only "$base" -- "${globs[@]}")" || gitfail diff
+changed+=$'\n'"$(git ls-files --others -- "${globs[@]}" ':(exclude,glob)**/node_modules/**')" || gitfail ls-files
 changed="$(printf '%s\n' "$changed" | sed '/^$/d' | sort -u)"
 scripts() { node -e '
   const sort = (o) => Object.fromEntries(Object.entries(o ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)));
   let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => console.log(JSON.stringify(sort(t.trim() ? JSON.parse(t).scripts : {}))));'; }
-old_scripts="$(git show "$base:package.json" 2>/dev/null | scripts)"
+git cat-file -e "$base:package.json" 2>/dev/null || { echo "protected: the commit the task started from (main) has no package.json, so the scripts of the task's package.json cannot be compared with it."; exit 1; }
+old_scripts="$(git show "$base:package.json" | scripts)"
 new_scripts="$(scripts < package.json)"
 [ "$old_scripts" = "$new_scripts" ] || changed+=$'\n'"package.json (the scripts)"
 if [ -n "$changed" ]; then

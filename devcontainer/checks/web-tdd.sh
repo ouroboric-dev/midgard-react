@@ -7,9 +7,11 @@
 # with a note, and the reviewers look at it. Generated and type-only files are not code that needs a test.
 # Run in the leaf's top folder, on the run branch; main is where the task started from.
 set -euo pipefail
+# The git pathspec variables of the environment would change what the src/ and e2e/ pathspecs below match.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
 # shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
-base="$(git merge-base HEAD main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
+base="$(git merge-base HEAD refs/heads/main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
 "$(dirname "$0")/web-protected.sh"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
 npm ci --ignore-scripts --no-audit --no-fund
