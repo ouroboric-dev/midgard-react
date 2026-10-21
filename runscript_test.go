@@ -14,8 +14,9 @@ import (
 )
 
 // startRunScript starts the copy's run.sh in its own process group, with the given extra environment, and
-// returns the command and its output. The caller stops it with stopGroup.
-func startRunScript(t *testing.T, dir string, env ...string) (*exec.Cmd, *bytes.Buffer) {
+// returns the command, its output and a channel that receives its exit once. The caller stops it with
+// stopGroup. Only one goroutine waits on the command.
+func startRunScript(t *testing.T, dir string, env ...string) (*exec.Cmd, *bytes.Buffer, <-chan error) {
 	t.Helper()
 	cmd := exec.Command("./run.sh")
 	cmd.Dir = dir
@@ -26,19 +27,19 @@ func startRunScript(t *testing.T, dir string, env ...string) (*exec.Cmd, *bytes.
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("run.sh: %v", err)
 	}
-	return cmd, &out
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	return cmd, &out, exited
 }
 
 // stopGroup stops run.sh and everything it started (npm and node are its children).
-func stopGroup(cmd *exec.Cmd) {
+func stopGroup(cmd *exec.Cmd, exited <-chan error) {
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-	done := make(chan struct{})
-	go func() { _ = cmd.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-exited:
 	case <-time.After(10 * time.Second):
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		<-done
+		<-exited
 	}
 }
 
@@ -55,10 +56,13 @@ func TestRunScriptStarts(t *testing.T) {
 		t.Error("run.sh is not executable")
 	}
 	port := strconv.Itoa(freePort(t))
-	cmd, out := startRunScript(t, dir, "PORT="+port)
-	defer stopGroup(cmd)
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
+	cmd, out, exited := startRunScript(t, dir, "PORT="+port)
+	gone := false
+	defer func() {
+		if !gone {
+			stopGroup(cmd, exited)
+		}
+	}()
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		if c, err := net.DialTimeout("tcp", "127.0.0.1:"+port, time.Second); err == nil {
@@ -67,6 +71,7 @@ func TestRunScriptStarts(t *testing.T) {
 		}
 		select {
 		case err := <-exited:
+			gone = true
 			t.Fatalf("run.sh exited before the port answered: %v\n%s", err, out)
 		default:
 		}
