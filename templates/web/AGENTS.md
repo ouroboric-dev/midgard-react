@@ -20,7 +20,9 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - **Test first.** A new test fails on the parent commit, for the reason the task gives. The factory
   checks this: a change to code without a new or changed test is refused. Unit tests are `*.test.ts(x)`
   beside the code, with Vitest and Testing Library. One Playwright spec in `e2e/` per acceptance criterion
-  that a person does in the browser.
+  that a person does in the browser. A spec stubs the store only when `YGG_E2E_STORE` is unset: the factory's
+  rung has no store, so stub the calls to `/<bucket>/` (with `page.route`, for example); when `YGG_E2E_STORE` is
+  `1` (the acceptance run), a real store is behind `/<bucket>/` through the app's port: use it and stub nothing.
 - **The contract is a copy.** `contracts/api.openapi.yaml` is the API leaf's contract as this app uses it.
   The task gives you the contract text when the API changes: copy it exactly. After a change, run
   `npm run gen:api`; `src/api/schema.d.ts` is generated and committed, never edited by hand. The

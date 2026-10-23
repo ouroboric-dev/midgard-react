@@ -48,3 +48,23 @@ func TestPromptNamesTheRelease(t *testing.T) {
 		}
 	}
 }
+
+// The store in a spec (gallery-runtime T18): the rung has no store, the acceptance run has the real one. The
+// implementer prompt and the web template's AGENTS.md say when a spec stubs it.
+func TestPromptSaysWhenToStubTheStore(t *testing.T) {
+	agents, err := os.ReadFile(filepath.Join("templates", "web", "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, text := range map[string]string{"prompts/implementer.md": prompt(t, "implementer.md"), "templates/web/AGENTS.md": string(agents)} {
+		flat := strings.Join(strings.Fields(text), " ")
+		for _, want := range []string{"YGG_E2E_STORE", "unset", "`page.route`", "/<bucket>/", "`1`"} {
+			if !strings.Contains(flat, want) {
+				t.Errorf("%s does not mention %s", name, want)
+			}
+		}
+		if !strings.Contains(flat, "only when `YGG_E2E_STORE` is unset") {
+			t.Errorf("%s does not say a spec stubs the store only when YGG_E2E_STORE is unset", name)
+		}
+	}
+}

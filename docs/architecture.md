@@ -37,7 +37,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
   audits the policy names), `web-security` and `web-e2e` (Playwright against the built app and a Prism mock of the contract) make the leaf's ladder.
   `accept-e2e` is the acceptance run: on a snapshot of the project it checks the API still keeps what the
   web app's copy of the contract promises (the copy may lag; the API may not break it), builds and starts
-  the API against Postgres, and runs the Playwright specs.
+  the API against Postgres and the sandbox's SeaweedFS (the service `s3`; `YGG_S3_ENDPOINT` moves it) with the
+  runtime's names (`PORT`, `HOST`, `DATABASE_URL`, `DATA_DIR`, `S3_*`), serves the built app with the baked
+  `serve.mjs` (`devcontainer/checks/config/`, byte for byte `templates/web/serve.mjs`), and runs the Playwright
+  specs with `YGG_E2E_STORE=1`: a real store is behind `/<bucket>/`. In `web-e2e` the flag is unset, so a spec
+  stubs the store there (for example with `page.route` on `/<bucket>/`) and uses the real one in the acceptance run.
 - `devcontainer/checks/protected-common`: the files that configure the checks of every product, one git
   pathspec a line: the CI and dev container (`.github/`, `.devcontainer/`), `.pre-commit-config.yaml`, the
   markdown, YAML, shell and secret-scan configs, and the licensing files. `web-protected.sh`, the first step of

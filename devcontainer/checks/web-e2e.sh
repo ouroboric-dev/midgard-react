@@ -1,7 +1,7 @@
 #!/bin/bash
 # Rung 5 of the ladder for a web leaf (spec §9.5): Playwright runs against the built app. In a task's loop the
 # API behind the app is a mock made from the leaf's copy of the contract (Prism), so the task needs no API
-# of its own; the real API is part of the acceptance run (accept-e2e.sh). The ports are YGG_MOCK_PORT
+# of its own, and no store; the real API and store are part of the acceptance run (accept-e2e.sh). The ports are YGG_MOCK_PORT
 # (4010) and YGG_APP_PORT (4173); it refuses to start if either is taken. Run in the leaf's top folder. Every
 # server it starts is stopped.
 set -euo pipefail
@@ -47,4 +47,6 @@ echo "== app"
 pids+=($!)
 wait_for "$app_port" app
 echo "== playwright"
+# No store is behind /<bucket>/ here, whatever the caller's environment says: a spec stubs it (YGG_E2E_STORE unset).
+unset YGG_E2E_STORE
 E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test --config .ygg-playwright.config.ts

@@ -6,9 +6,13 @@
 # --config, playwright test --config) so no config the leaf has is read: not one added in a folder (ESLint
 # looks for the nearest), not a symlink, not one git ignores. The copies are made AFTER npm ci, as fresh
 # files: whatever the agent left at their names (a file, a symlink, a folder) is removed first. They are
-# removed when the rung ends, so the leaf is as it was.
+# removed when the rung ends, so the leaf is as it was. The acceptance run also serves the bundle with the baked
+# server (ygg_serve, a copy of the template's serve.mjs), not the leaf's, so the leaf cannot change how the
+# product is served while it is checked.
 set -euo pipefail
 ygg_config_src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+# shellcheck disable=SC2034 # used by accept-e2e.sh, which sources this file
+ygg_serve="$ygg_config_src/serve.mjs"
 ygg_config_names=(eslint.config.js tsconfig.json vite.config.ts playwright.config.ts)
 ygg_config_copies=()
 

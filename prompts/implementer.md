@@ -52,6 +52,10 @@ npm run build
 `npm run test:e2e` needs a browser and an API; the factory runs it against a mock of the contract. Write the
 specs anyway, and read them as a user would.
 
+A spec that needs the store (a photo upload, for one) stubs it only when `YGG_E2E_STORE` is unset: in the factory's
+rung there is no store, so stub the calls to `/<bucket>/` (with `page.route`, for example). When `YGG_E2E_STORE` is
+`1` (the acceptance run), a real store is behind `/<bucket>/` through the app's port: use it and stub nothing.
+
 ## What you must not do
 
 - Do not run `git commit`, `git checkout`, `git reset` or any other command that changes history or
