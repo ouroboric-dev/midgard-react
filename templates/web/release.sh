@@ -4,12 +4,17 @@
 # does (npm ci, exactly as package-lock.json says; this is the one step that reaches the registry), builds the
 # bundle, and writes only into $OUT and this folder's dist/ and node_modules/ (both ignored by git).
 set -eu
-cd "$(dirname "$0")"
 
 if [ -z "${OUT:-}" ]; then
   echo "release.sh: OUT is not set. Run it as: OUT=/path/to/release ./release.sh" >&2
   exit 1
 fi
+# A relative OUT is relative to the caller's folder, not to this one.
+case "$OUT" in
+  /*) ;;
+  *) OUT="$PWD/$OUT" ;;
+esac
+cd "$(dirname "$0")"
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
@@ -19,6 +24,8 @@ npm run build --silent
 rm -rf "$OUT/dist"
 mkdir "$OUT/dist"
 cp -RL dist/. "$OUT/dist/"
+# Remove first: a symlink planted at either name must not be followed.
+rm -f "$OUT/run.sh" "$OUT/serve.mjs"
 cp serve.mjs "$OUT/serve.mjs"
 
 cat >"$OUT/run.sh" <<'RUN'

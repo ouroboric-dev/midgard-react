@@ -36,8 +36,7 @@ nothing (`init.sh` does that). `serve.mjs` is what serves the leaf (on port 3000
 `127.0.0.1` by default): it forwards `/api/` to `API_URL` and the bucket's path (`/$S3_BUCKET/`) to `S3_ENDPOINT`,
 so the browser reaches everything on one port. `release.sh` builds the release the product runs (`OUT/dist`,
 `OUT/serve.mjs` and `OUT/run.sh`, which starts with Node alone). Keep `run.sh`, `serve.mjs` and `release.sh` working.
-Change them only when the product needs another way to start, and `release.sh` also when the leaf's build changes
-(keep all three working).
+Change them only when the product needs another way to start, and `release.sh` also when the leaf's build changes.
 
 ## Check your work before you stop
 

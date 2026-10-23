@@ -31,17 +31,35 @@ func TestReleaseScriptStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("node is not installed: %v", err)
 	}
-	out := t.TempDir()
-	cmd := exec.Command("./release.sh")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "OUT="+out)
+	// A relative OUT is the caller's: the script runs from another folder, with OUT a folder of the caller's
+	// that already holds symlinks at the names the script writes (they must not be followed).
+	caller := t.TempDir()
+	out := filepath.Join(caller, "release")
+	victim := filepath.Join(caller, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"run.sh", "serve.mjs"} {
+		if err := os.Symlink(victim, filepath.Join(out, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(filepath.Join(dir, "release.sh"))
+	cmd.Dir = caller
+	cmd.Env = append(os.Environ(), "OUT=release")
 	if b, err := cmd.CombinedOutput(); err != nil {
-		if os.Getenv("YGG_REQUIRE_TEMPLATES") == "" && strings.Contains(string(b), "npm ci") && strings.Contains(string(b), "ENOTFOUND") {
+		if os.Getenv("YGG_REQUIRE_TEMPLATES") == "" && strings.Contains(string(b), "npm ci") && (strings.Contains(string(b), "ENOTFOUND") || strings.Contains(string(b), "EAI_AGAIN")) {
 			t.Skipf("the template's packages can't be installed: %v", err)
 		}
 		t.Fatalf("release.sh: %v\n%s", err, b)
 	}
 
+	if b, err := os.ReadFile(victim); err != nil || string(b) != "keep" {
+		t.Errorf("release.sh wrote through a symlink: %q, %v", b, err)
+	}
 	// Only regular files and folders, and no node_modules.
 	err = filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {

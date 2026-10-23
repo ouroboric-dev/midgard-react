@@ -43,8 +43,8 @@ func TestPromptNamesTheRelease(t *testing.T) {
 		if !strings.Contains(text, "release.sh") {
 			t.Errorf("%s does not name release.sh", name)
 		}
-		if !strings.Contains(strings.ToLower(text), "keep release.sh working") && !strings.Contains(strings.ToLower(text), "keep all three working") {
-			t.Errorf("%s does not say to keep release.sh working", name)
+		if !strings.Contains(strings.Join(strings.Fields(text), " "), "Keep `run.sh`, `serve.mjs` and `release.sh` working") {
+			t.Errorf("%s does not say to keep run.sh, serve.mjs and release.sh working", name)
 		}
 	}
 }
