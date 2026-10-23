@@ -104,3 +104,24 @@ func TestEveryCheckScriptIsExecutableAndStartsTheWayTheOthersDo(t *testing.T) {
 		}
 	}
 }
+
+// The stack builds every leaf's release, the Go API's too, so its Go must carry the fix for GO-2026-6809
+// (crypto/x509, Go 1.26.10). The repo's own devcontainer builds the same code and takes the same image.
+const golang12610 = "docker.io/library/golang:1.26.10-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af"
+
+func TestTheGolangImagesAreGo12610BecauseOfGO20266809(t *testing.T) {
+	cf, err := os.ReadFile(filepath.Join("devcontainer", "Containerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`(?m)^FROM ` + regexp.QuoteMeta(golang12610) + ` AS golang$`).Match(cf) {
+		t.Errorf("the stack's golang stage is not FROM %s", golang12610)
+	}
+	dc, err := os.ReadFile(filepath.Join(".devcontainer", "devcontainer.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dc), `"image": "`+golang12610+`"`) {
+		t.Errorf("the repo's devcontainer image is not %s", golang12610)
+	}
+}
