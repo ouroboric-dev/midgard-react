@@ -29,6 +29,10 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - `pack.yaml`: the leaf recipe (template, implementer prompt, the ladder by name), the check scripts, and
   the sandbox: two images built from `devcontainer/`, the leaf's stack (`web`) and the one for acceptance
   checks (`acceptance`, with Go).
+- The stack's Go is 1.26.10 (`golang:1.26.10-bookworm`, by digest; the repo's own devcontainer takes the same
+  image). Why: GO-2026-6809 (`crypto/x509`, fixed in 1.26.10) is reached from the API template, and the stack
+  builds the API's release too. The image was pushed 2026-10-21, younger than RR-13's two weeks: the founder
+  approved the exception on 2026-10-23, as for `helheim-go`.
 - `prompts/implementer.md`: the implementer prompt, the only prompt here. The graph's other prompts are
   Voluspa's.
 - `devcontainer/Containerfile` and `devcontainer/checks/`: the stack and the ladder's scripts. `web-static`,
