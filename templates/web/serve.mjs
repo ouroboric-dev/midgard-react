@@ -4,10 +4,13 @@
 //   /<S3_BUCKET>/.. to S3_ENDPOINT with its method, path, query, body and Host unchanged and no X-Forwarded-*
 //                   header, so that a presigned signature still matches the address the browser used.
 // Any other path answers a file of the bundle, or index.html when it names no file. It reads no secret.
+import console from "node:console";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import path from "node:path";
+import process from "node:process";
+import { URL } from "node:url";
 import { pipeline } from "node:stream";
 
 const port = Number(process.env.PORT);
