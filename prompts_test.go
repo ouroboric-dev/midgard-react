@@ -58,7 +58,7 @@ func TestPromptSaysWhenToStubTheStore(t *testing.T) {
 	}
 	for name, text := range map[string]string{"prompts/implementer.md": prompt(t, "implementer.md"), "templates/web/AGENTS.md": string(agents)} {
 		flat := strings.Join(strings.Fields(text), " ")
-		for _, want := range []string{"YGG_E2E_STORE", "unset", "`page.route`", "/<bucket>/", "`1`"} {
+		for _, want := range []string{"YGG_E2E_STORE", "unset", "`page.route`", "/<bucket>/", "`1`", "ygg-store"} {
 			if !strings.Contains(flat, want) {
 				t.Errorf("%s does not mention %s", name, want)
 			}

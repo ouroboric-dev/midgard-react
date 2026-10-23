@@ -53,8 +53,10 @@ npm run build
 specs anyway, and read them as a user would.
 
 A spec that needs the store (a photo upload, for one) stubs it only when `YGG_E2E_STORE` is unset: in the factory's
-rung there is no store, so stub the calls to `/<bucket>/` (with `page.route`, for example). When `YGG_E2E_STORE` is
-`1` (the acceptance run), a real store is behind `/<bucket>/` through the app's port: use it and stub nothing.
+rung there is no store, so stub the calls to `/<bucket>/` (with `page.route`, for example). The bucket is
+`ygg-store`. Stub `/ygg-store/...` with the upload URL the API contract's example gives (which should use the
+bucket's path), or stub the API call that returns the upload URL too. When `YGG_E2E_STORE` is `1` (the acceptance
+run), a real store is behind `/<bucket>/` through the app's port: use it and stub nothing.
 
 ## What you must not do
 

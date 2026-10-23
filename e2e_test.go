@@ -248,7 +248,7 @@ exec python3 -m http.server "\$PORT" --bind 127.0.0.1 >/dev/null 2>&1
 EOS
 chmod +x "$out"
 `)
-	stub(t, bin, "node", `echo "node $1 PORT=$PORT HOST=$HOST API_URL=$API_URL S3_ENDPOINT=$S3_ENDPOINT S3_BUCKET=$S3_BUCKET DIST=$DIST" >> "`+bin+`/calls.log"
+	stub(t, bin, "node", `echo "node $1 PORT=$PORT HOST=$HOST API_URL=$API_URL S3_ENDPOINT=$S3_ENDPOINT S3_BUCKET=$S3_BUCKET PWD=$PWD" >> "`+bin+`/calls.log"
 exec python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1
 `)
 	webTools(t, bin, webE2ETools(bin))
@@ -295,10 +295,13 @@ func TestAcceptanceGivesTheRuntime(t *testing.T) {
 	if !strings.HasPrefix(nodeLine, "node "+bakedPath("serve.mjs")+" ") {
 		t.Errorf("the web app is not served by the baked serve.mjs:\n%s", nodeLine)
 	}
-	for _, want := range []string{"HOST=127.0.0.1", "API_URL=http://127.0.0.1:", "S3_ENDPOINT=http://s3:8333 ", "S3_BUCKET=ygg-store ", "DIST="} {
+	for _, want := range []string{"HOST=127.0.0.1", "API_URL=http://127.0.0.1:", "S3_ENDPOINT=http://s3:8333 ", "S3_BUCKET=ygg-store "} {
 		if !strings.Contains(nodeLine, want) {
 			t.Errorf("the node line lacks %q:\n%s", want, nodeLine)
 		}
+	}
+	if !strings.HasSuffix(nodeLine, "/repos/web") {
+		t.Errorf("the web app is not served from the leaf's folder:\n%s", nodeLine)
 	}
 	if strings.Contains(got, "vite preview") || strings.Contains(got, "app API_URL") {
 		t.Errorf("the web app was served by vite preview:\n%s", got)

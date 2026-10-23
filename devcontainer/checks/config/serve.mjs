@@ -131,8 +131,13 @@ const server = http.createServer((req, res) => {
   const pathname = url.split("?")[0];
 
   if (storeUrl && storePrefix && (pathname === storePrefix.slice(0, -1) || pathname.startsWith(storePrefix))) {
-    // Path, query, body and Host as the browser sent them; nothing added.
-    forward(req, res, storeUrl, url, hopFree(req.headers));
+    // Path, query, body and Host as the browser sent them; nothing added, and no forwarding header a client sent
+    // (the store checks X-Forwarded-Host before Host, so one would break a valid signature).
+    const headers = hopFree(req.headers);
+    for (const name of ["x-forwarded-host", "x-forwarded-port", "x-forwarded-proto", "x-forwarded-for", "forwarded"]) {
+      delete headers[name];
+    }
+    forward(req, res, storeUrl, url, headers);
     return;
   }
   if (pathname === "/api" || pathname.startsWith("/api/")) {

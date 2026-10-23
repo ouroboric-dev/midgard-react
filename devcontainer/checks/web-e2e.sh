@@ -1,9 +1,9 @@
 #!/bin/bash
 # Rung 5 of the ladder for a web leaf (spec §9.5): Playwright runs against the built app. In a task's loop the
 # API behind the app is a mock made from the leaf's copy of the contract (Prism), so the task needs no API
-# of its own, and no store; the real API and store are part of the acceptance run (accept-e2e.sh). The ports are YGG_MOCK_PORT
-# (4010) and YGG_APP_PORT (4173); it refuses to start if either is taken. Run in the leaf's top folder. Every
-# server it starts is stopped.
+# of its own, and no store; the real API and store are part of the acceptance run (accept-e2e.sh). The ports are
+# YGG_MOCK_PORT (4010) and YGG_APP_PORT (4173); it refuses to start if either is taken. Run in the leaf's top
+# folder. Every server it starts is stopped.
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"

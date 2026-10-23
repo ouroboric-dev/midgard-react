@@ -156,6 +156,12 @@ func TestServeForwards(t *testing.T) {
 	t.Run("store", func(t *testing.T) {
 		req, _ := http.NewRequest("PUT", base+"/ygg-store/a/b.jpg?X-Amz-Signature=s", strings.NewReader("PHOTO-BYTES"))
 		req.Host = "gallery.test:3000"
+		// A client may send forwarding headers of its own; SeaweedFS checks them before Host, so none may pass.
+		req.Header.Set("X-Forwarded-Host", "evil.test")
+		req.Header.Set("X-Forwarded-Port", "1")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-For", "6.6.6.6")
+		req.Header.Set("Forwarded", "host=evil.test")
 		resp, body := fetch(t, req)
 		if resp.StatusCode != 200 || body != "from-store" {
 			t.Fatalf("got %d %q", resp.StatusCode, body)
@@ -167,7 +173,7 @@ func TestServeForwards(t *testing.T) {
 		if got.host != "gallery.test:3000" {
 			t.Errorf("the store's Host = %q, want the request's", got.host)
 		}
-		for _, h := range []string{"X-Forwarded-Host", "X-Forwarded-Port", "X-Forwarded-Proto", "X-Forwarded-For"} {
+		for _, h := range []string{"X-Forwarded-Host", "X-Forwarded-Port", "X-Forwarded-Proto", "X-Forwarded-For", "Forwarded"} {
 			if v := got.header.Get(h); v != "" {
 				t.Errorf("the store got %s: %q", h, v)
 			}
