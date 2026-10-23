@@ -49,4 +49,8 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - `src/api/schema.d.ts`: generated from the contract.
 - `contracts/`: the API contract. `e2e/`: Playwright specs.
 - `init.sh` installs the packages. `run.sh` starts the leaf: `PORT=3000 ./run.sh` builds the bundle and serves
-  it on that port. It installs nothing. Keep it working: a test starts it.
+  it on that port with `serve.mjs`, the leaf's own server (Node's standard library, no package). `serve.mjs`
+  listens on `HOST` (default `127.0.0.1`; the product start sets `0.0.0.0` and port 3000), serves `dist/` with
+  `index.html` for a path that names no file, forwards `/api/` to `API_URL` without the prefix, and forwards the
+  bucket's path (`/$S3_BUCKET/`, `ygg-store` in the product) to `S3_ENDPOINT` unchanged. `run.sh` installs
+  nothing. Keep both working: tests start them.

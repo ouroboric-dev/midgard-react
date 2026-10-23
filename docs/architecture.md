@@ -56,7 +56,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
   and Query, a typed client for the contract, a tested component and a Playwright spec. It also holds the
   leaf run contract's `run.sh` (change proposal `2026-10-21-leaf-run-contract`): with `PORT` set it builds the
-  bundle with `npm run build` and serves it with `vite preview` on `127.0.0.1:$PORT`. It installs nothing
+  bundle with `npm run build` and serves it with `serve.mjs` (Node's standard library) on `$HOST:$PORT` (`HOST`
+  defaults to `127.0.0.1`; the product start sets `0.0.0.0` and port 3000). `serve.mjs` answers the bundle with an
+  `index.html` fallback, forwards `/api/` to `API_URL` with `X-Forwarded-Host` and `X-Forwarded-Proto`, and forwards
+  the bucket's path (`/$S3_BUCKET/`, `ygg-store`) to `S3_ENDPOINT` unchanged and with no `X-Forwarded-*` header
+  (delta §9.3; `TestServeForwards`). `vite.config.ts` keeps the dev server's own proxy. `run.sh` installs nothing
   (`init.sh` does), exits non-zero with a message when `PORT` is unset or `node_modules` is missing, and is not a
   protected file. `TestRunScriptStarts` starts it from a copy of the template and waits for the port.
 
