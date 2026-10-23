@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -175,6 +174,18 @@ func TestServeForwards(t *testing.T) {
 		}
 	})
 
+	t.Run("bucket", func(t *testing.T) {
+		for _, p := range []string{"/ygg-store", "/ygg-store?list-type=2"} {
+			resp, body := fetch(t, mustGet(t, base+p))
+			if resp.StatusCode != 200 || body != "from-store" {
+				t.Errorf("GET %s: %d %q", p, resp.StatusCode, body)
+			}
+			if got := store.get(); got.uri != p {
+				t.Errorf("GET %s: the store got %q", p, got.uri)
+			}
+		}
+	})
+
 	t.Run("bundle", func(t *testing.T) {
 		for _, p := range []string{"/", "/galleries/x"} {
 			resp, body := fetch(t, mustGet(t, base+p))
@@ -207,9 +218,6 @@ func TestServeForwards(t *testing.T) {
 
 func mustGet(t *testing.T, u string) *http.Request {
 	t.Helper()
-	if _, err := url.Parse(u); err != nil {
-		t.Fatal(err)
-	}
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		t.Fatal(err)

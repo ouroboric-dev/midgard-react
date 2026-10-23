@@ -34,7 +34,7 @@ the test that proves it.
 `run.sh` starts this leaf: with `PORT` set it builds the bundle and serves it on that port, and it installs
 nothing (`init.sh` does that). `serve.mjs` is what serves the leaf (on port 3000 in the product, on `HOST`,
 `127.0.0.1` by default): it forwards `/api/` to `API_URL` and the bucket's path (`/$S3_BUCKET/`) to `S3_ENDPOINT`,
-so the browser reaches everything on one port. Keep both working. Keep it working. Change it only when the product needs another way to start.
+so the browser reaches everything on one port. Keep both working. Change it only when the product needs another way to start.
 
 ## Check your work before you stop
 

@@ -1,7 +1,7 @@
 // The web leaf's own server (node:http and node:fs only, no package). It serves the built bundle (DIST, default
 // "dist") on HOST:PORT, and forwards two prefixes:
 //   /api/...        to API_URL without the "/api" prefix, with X-Forwarded-Host and X-Forwarded-Proto set;
-//   /<S3_BUCKET>/.. to S3_ENDPOINT with its method, path, query, body and Host unchanged and no X-Forwarded-*
+//   /<S3_BUCKET>[/..] to S3_ENDPOINT with its method, path, query, body and Host unchanged and no X-Forwarded-*
 //                   header, so that a presigned signature still matches the address the browser used.
 // Any other path answers a file of the bundle, or index.html when it names no file. It reads no secret.
 import console from "node:console";
@@ -58,7 +58,7 @@ function forward(req, res, target, urlPath, headers) {
       headers,
     },
     (answer) => {
-      res.writeHead(answer.statusCode, answer.statusMessage, answer.headers);
+      res.writeHead(answer.statusCode, answer.statusMessage, hopFree(answer.headers));
       pipeline(answer, res, () => {});
     },
   );
@@ -130,7 +130,7 @@ const server = http.createServer((req, res) => {
   const url = req.url || "/";
   const pathname = url.split("?")[0];
 
-  if (storeUrl && storePrefix && pathname.startsWith(storePrefix)) {
+  if (storeUrl && storePrefix && (pathname === storePrefix.slice(0, -1) || pathname.startsWith(storePrefix))) {
     // Path, query, body and Host as the browser sent them; nothing added.
     forward(req, res, storeUrl, url, hopFree(req.headers));
     return;
