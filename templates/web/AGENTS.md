@@ -53,4 +53,6 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
   listens on `HOST` (default `127.0.0.1`; the product start sets `0.0.0.0` and port 3000), serves `dist/` with
   `index.html` for a path that names no file, forwards `/api/` to `API_URL` without the prefix, and forwards the
   bucket's path (`/$S3_BUCKET/`, `ygg-store` in the product) to `S3_ENDPOINT` unchanged. `run.sh` installs
-  nothing. Keep both working: tests start them.
+  nothing. `release.sh` builds the release into `$OUT` (`OUT/dist`, `OUT/serve.mjs` and `OUT/run.sh`) for the
+  product start: `OUT=/path ./release.sh`; the release starts with Node alone. Keep all three working, and
+  change `release.sh` only when the leaf's build changes: tests start them.

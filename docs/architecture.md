@@ -63,6 +63,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
   (delta §9.3; `TestServeForwards`). `vite.config.ts` keeps the dev server's own proxy. `run.sh` installs nothing
   (`init.sh` does), exits non-zero with a message when `PORT` is unset or `node_modules` is missing, and is not a
   protected file. `TestRunScriptStarts` starts it from a copy of the template and waits for the port.
+  `release.sh` (gallery-runtime T17) builds the release the product start runs: with `OUT` set it runs
+  `npm ci --ignore-scripts --no-audit --no-fund` and `npm run build`, then writes `OUT/dist`, `OUT/serve.mjs` and an
+  `OUT/run.sh` that checks `PORT` and runs `exec node serve.mjs` in its own folder, so the release starts with Node
+  alone (no npm, no `node_modules`) and holds only regular files. `TestReleaseScriptStarts` builds it from a copy
+  with no `node_modules` and starts it with a `PATH` that holds `node` and no `npm`.
 
 ## Routing
 

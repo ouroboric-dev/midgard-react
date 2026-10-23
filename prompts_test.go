@@ -31,3 +31,20 @@ func sensible(t *testing.T, names []string) {
 		}
 	}
 }
+
+// The release (gallery-runtime T17): the implementer prompt and the web template's AGENTS.md name release.sh and
+// say to keep it working, as they do for run.sh.
+func TestPromptNamesTheRelease(t *testing.T) {
+	agents, err := os.ReadFile(filepath.Join("templates", "web", "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, text := range map[string]string{"prompts/implementer.md": prompt(t, "implementer.md"), "templates/web/AGENTS.md": string(agents)} {
+		if !strings.Contains(text, "release.sh") {
+			t.Errorf("%s does not name release.sh", name)
+		}
+		if !strings.Contains(strings.ToLower(text), "keep release.sh working") && !strings.Contains(strings.ToLower(text), "keep all three working") {
+			t.Errorf("%s does not say to keep release.sh working", name)
+		}
+	}
+}
