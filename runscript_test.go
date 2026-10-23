@@ -2,7 +2,9 @@ package midgard
 
 import (
 	"bytes"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,6 +69,16 @@ func TestRunScriptStarts(t *testing.T) {
 	for {
 		if c, err := net.DialTimeout("tcp", "127.0.0.1:"+port, time.Second); err == nil {
 			c.Close()
+			// serve.mjs serves the built bundle: the root answers index.html.
+			resp, err := http.Get("http://127.0.0.1:" + port + "/")
+			if err != nil {
+				t.Fatalf("GET /: %v\n%s", err, out)
+			}
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != 200 || !strings.Contains(string(body), "<div id=\"root\">") {
+				t.Errorf("GET /: %d, want the built index.html:\n%s", resp.StatusCode, body)
+			}
 			return
 		}
 		select {

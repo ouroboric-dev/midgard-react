@@ -20,7 +20,11 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - **Test first.** A new test fails on the parent commit, for the reason the task gives. The factory
   checks this: a change to code without a new or changed test is refused. Unit tests are `*.test.ts(x)`
   beside the code, with Vitest and Testing Library. One Playwright spec in `e2e/` per acceptance criterion
-  that a person does in the browser.
+  that a person does in the browser. A spec stubs the store only when `YGG_E2E_STORE` is unset: the factory's
+  rung has no store, so stub the calls to `/<bucket>/` (with `page.route`, for example). The bucket is `ygg-store`.
+  Stub `/ygg-store/...` with the upload URL the API contract's example gives (which should use the bucket's path),
+  or stub the API call that returns the upload URL too. When `YGG_E2E_STORE` is `1` (the acceptance run), a real
+  store is behind `/<bucket>/` through the app's port: use it and stub nothing.
 - **The contract is a copy.** `contracts/api.openapi.yaml` is the API leaf's contract as this app uses it.
   The task gives you the contract text when the API changes: copy it exactly. After a change, run
   `npm run gen:api`; `src/api/schema.d.ts` is generated and committed, never edited by hand. The
@@ -49,4 +53,10 @@ This file only adds rules for this leaf. Read `docs/` for the design; this file 
 - `src/api/schema.d.ts`: generated from the contract.
 - `contracts/`: the API contract. `e2e/`: Playwright specs.
 - `init.sh` installs the packages. `run.sh` starts the leaf: `PORT=3000 ./run.sh` builds the bundle and serves
-  it on that port. It installs nothing. Keep it working: a test starts it.
+  it on that port with `serve.mjs`, the leaf's own server (Node's standard library, no package). `serve.mjs`
+  listens on `HOST` (default `127.0.0.1`; the product start sets `0.0.0.0` and port 3000), serves `dist/` with
+  `index.html` for a path that names no file, forwards `/api/` to `API_URL` without the prefix, and forwards the
+  bucket's path (`/$S3_BUCKET/`, `ygg-store` in the product) to `S3_ENDPOINT` unchanged. `run.sh` installs
+  nothing. `release.sh` builds the release into `$OUT` (`OUT/dist`, `OUT/serve.mjs` and `OUT/run.sh`) for the
+  product start: `OUT=/path ./release.sh`; the release starts with Node alone. Keep `run.sh`, `serve.mjs` and
+  `release.sh` working, and change `release.sh` only when the leaf's build changes: tests start them.

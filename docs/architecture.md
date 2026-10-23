@@ -37,7 +37,11 @@ change proposal `2026-10-17-realm-leaf-naming`).
   audits the policy names), `web-security` and `web-e2e` (Playwright against the built app and a Prism mock of the contract) make the leaf's ladder.
   `accept-e2e` is the acceptance run: on a snapshot of the project it checks the API still keeps what the
   web app's copy of the contract promises (the copy may lag; the API may not break it), builds and starts
-  the API against Postgres, and runs the Playwright specs.
+  the API against Postgres and the sandbox's SeaweedFS (the service `s3`; `YGG_S3_ENDPOINT` moves it) with the
+  runtime's names (`PORT`, `HOST`, `DATABASE_URL`, `DATA_DIR`, `S3_*`), serves the built app with the baked
+  `serve.mjs` (`devcontainer/checks/config/`, byte for byte `templates/web/serve.mjs`), and runs the Playwright
+  specs with `YGG_E2E_STORE=1`: a real store is behind `/<bucket>/`. In `web-e2e` the flag is unset, so a spec
+  stubs the store there (for example with `page.route` on `/<bucket>/`) and uses the real one in the acceptance run.
 - `devcontainer/checks/protected-common`: the files that configure the checks of every product, one git
   pathspec a line: the CI and dev container (`.github/`, `.devcontainer/`), `.pre-commit-config.yaml`, the
   markdown, YAML, shell and secret-scan configs, and the licensing files. `web-protected.sh`, the first step of
@@ -56,9 +60,18 @@ change proposal `2026-10-17-realm-leaf-naming`).
 - `templates/web/`: the leaf a new web app starts from: Vite, React, TypeScript, Tailwind, TanStack Router
   and Query, a typed client for the contract, a tested component and a Playwright spec. It also holds the
   leaf run contract's `run.sh` (change proposal `2026-10-21-leaf-run-contract`): with `PORT` set it builds the
-  bundle with `npm run build` and serves it with `vite preview` on `127.0.0.1:$PORT`. It installs nothing
+  bundle with `npm run build` and serves it with `serve.mjs` (Node's standard library) on `$HOST:$PORT` (`HOST`
+  defaults to `127.0.0.1`; the product start sets `0.0.0.0` and port 3000). `serve.mjs` answers the bundle with an
+  `index.html` fallback, forwards `/api/` to `API_URL` with `X-Forwarded-Host` and `X-Forwarded-Proto`, and forwards
+  the bucket's path (`/$S3_BUCKET/`, `ygg-store`) to `S3_ENDPOINT` unchanged and with no `X-Forwarded-*` header
+  (delta §9.3; `TestServeForwards`). `vite.config.ts` keeps the dev server's own proxy. `run.sh` installs nothing
   (`init.sh` does), exits non-zero with a message when `PORT` is unset or `node_modules` is missing, and is not a
   protected file. `TestRunScriptStarts` starts it from a copy of the template and waits for the port.
+  `release.sh` (gallery-runtime T17) builds the release the product start runs: with `OUT` set it runs
+  `npm ci --ignore-scripts --no-audit --no-fund` and `npm run build`, then writes `OUT/dist`, `OUT/serve.mjs` and an
+  `OUT/run.sh` that checks `PORT` and runs `exec node serve.mjs` in its own folder, so the release starts with Node
+  alone (no npm, no `node_modules`) and holds only regular files. `TestReleaseScriptStarts` builds it from a copy
+  with no `node_modules` and starts it with a `PATH` that holds `node` and no `npm`.
 
 ## Routing
 

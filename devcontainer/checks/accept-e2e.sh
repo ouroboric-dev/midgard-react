@@ -12,6 +12,7 @@ set -euo pipefail
 api="${YGG_API_DIR:-repos/api}" web="${YGG_WEB_DIR:-repos/web}" wait_s="${YGG_E2E_WAIT:-60}"
 api_port="${YGG_API_PORT:-8080}" app_port="${YGG_APP_PORT:-4173}"
 db_host="${YGG_DB_HOST:-postgres}" db_port="${YGG_DB_PORT:-5432}"
+s3_endpoint="${YGG_S3_ENDPOINT:-http://s3:8333}" s3_bucket=ygg-store
 has_api=1
 [ -e "$api" ] || has_api=0
 if [ "$has_api" -eq 1 ]; then
@@ -56,7 +57,11 @@ if [ "$has_api" -eq 1 ]; then
   echo "== build the API"
   (cd "$api" && go build -o "$log/api" ./cmd/api)
   echo "== start the API"
-  PORT="$api_port" DATABASE_URL="postgres://postgres@$db_host:$db_port/app?sslmode=disable" "$log/api" >"$log/api.log" 2>&1 &
+  mkdir -p "$log/data"
+  # The sandbox's SeaweedFS has no identity file and accepts any key: the pair is a fixed dummy one.
+  PORT="$api_port" HOST=127.0.0.1 DATABASE_URL="postgres://postgres@$db_host:$db_port/app?sslmode=disable" DATA_DIR="$log/data" \
+    S3_ENDPOINT="$s3_endpoint" S3_REGION=us-east-1 S3_BUCKET="$s3_bucket" S3_ACCESS_KEY_ID=ygg-accept S3_SECRET_ACCESS_KEY=ygg-accept-secret \
+    "$log/api" >"$log/api.log" 2>&1 &
   pids+=($!)
   wait_for "$api_port" api
 elif [ -f "$web/contracts/api.openapi.yaml" ]; then
@@ -74,8 +79,16 @@ echo "== build the web app"
 ygg_configs_install "$web"
 (cd "$web" && node_modules/.bin/tsc --noEmit -p .ygg-tsconfig.json && node_modules/.bin/vite build --config .ygg-vite.config.ts)
 echo "== start the web app"
-(cd "$web" && exec env ${api_port:+"API_URL=http://127.0.0.1:$api_port"} node_modules/.bin/vite preview --config .ygg-vite.config.ts --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
+store=""
+if [ "$has_api" -eq 1 ]; then
+  # The baked server, from the leaf's folder (it serves ./dist), never the leaf's own serve.mjs.
+  (cd "$web" && exec env PORT="$app_port" HOST=127.0.0.1 API_URL="http://127.0.0.1:$api_port" S3_ENDPOINT="$s3_endpoint" S3_BUCKET="$s3_bucket" node "$ygg_serve") >"$log/app.log" 2>&1 &
+  store=1
+else
+  (cd "$web" && exec env ${api_port:+"API_URL=http://127.0.0.1:$api_port"} node_modules/.bin/vite preview --config .ygg-vite.config.ts --host 127.0.0.1 --port "$app_port" --strictPort) >"$log/app.log" 2>&1 &
+fi
 pids+=($!)
 wait_for "$app_port" app
 echo "== playwright"
-(cd "$web" && E2E_URL="http://127.0.0.1:$app_port" node_modules/.bin/playwright test --config .ygg-playwright.config.ts)
+# YGG_E2E_STORE=1 tells a spec that a real store is behind /<bucket>/; with no API there is none.
+(cd "$web" && unset YGG_E2E_STORE && env E2E_URL="http://127.0.0.1:$app_port" ${store:+YGG_E2E_STORE=1} node_modules/.bin/playwright test --config .ygg-playwright.config.ts)

@@ -481,9 +481,15 @@ func TestTheTemplatesToolConfigsAreTheBakedOnes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// deps-policy.json is data for web-deps.sh, not a tool config (see deps_test.go).
-	if len(entries) != len(bakedConfigs)+1 {
-		t.Errorf("devcontainer/checks/config has %d files, want the %d tool configs %v and deps-policy.json", len(entries), len(bakedConfigs), bakedConfigs)
+	// deps-policy.json is data for web-deps.sh, not a tool config (see deps_test.go); serve.mjs is the server the
+	// acceptance run starts (TestBakedServeIsTheTemplates).
+	if len(entries) != len(bakedConfigs)+2 {
+		t.Errorf("devcontainer/checks/config has %d files, want the %d tool configs %v, deps-policy.json and serve.mjs", len(entries), len(bakedConfigs), bakedConfigs)
+	}
+	for _, name := range []string{"serve.mjs", "deps-policy.json"} {
+		if _, err := os.Stat(bakedPath(name)); err != nil {
+			t.Errorf("no baked %s: %v", name, err)
+		}
 	}
 	for _, name := range bakedConfigs {
 		baked, err := os.ReadFile(bakedPath(name))

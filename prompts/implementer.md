@@ -32,7 +32,11 @@ the test that proves it.
 ## Starting the leaf
 
 `run.sh` starts this leaf: with `PORT` set it builds the bundle and serves it on that port, and it installs
-nothing (`init.sh` does that). Keep it working. Change it only when the product needs another way to start.
+nothing (`init.sh` does that). `serve.mjs` is what serves the leaf (on port 3000 in the product, on `HOST`,
+`127.0.0.1` by default): it forwards `/api/` to `API_URL` and the bucket's path (`/$S3_BUCKET/`) to `S3_ENDPOINT`,
+so the browser reaches everything on one port. `release.sh` builds the release the product runs (`OUT/dist`,
+`OUT/serve.mjs` and `OUT/run.sh`, which starts with Node alone). Keep `run.sh`, `serve.mjs` and `release.sh` working.
+Change them only when the product needs another way to start, and `release.sh` also when the leaf's build changes.
 
 ## Check your work before you stop
 
@@ -47,6 +51,12 @@ npm run build
 
 `npm run test:e2e` needs a browser and an API; the factory runs it against a mock of the contract. Write the
 specs anyway, and read them as a user would.
+
+A spec that needs the store (a photo upload, for one) stubs it only when `YGG_E2E_STORE` is unset: in the factory's
+rung there is no store, so stub the calls to `/<bucket>/` (with `page.route`, for example). The bucket is
+`ygg-store`. Stub `/ygg-store/...` with the upload URL the API contract's example gives (which should use the
+bucket's path), or stub the API call that returns the upload URL too. When `YGG_E2E_STORE` is `1` (the acceptance
+run), a real store is behind `/<bucket>/` through the app's port: use it and stub nothing.
 
 ## What you must not do
 

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Starts this leaf on $PORT: builds the bundle, then serves it in the foreground (vite preview, already a
-# devDependency). It installs nothing: ./init.sh installs the packages first. It reads no secret and writes
-# only dist/ in this folder (ignored by git) and what npm and tsc keep in their own caches.
+# Starts this leaf on $PORT: builds the bundle, then serves it in the foreground (node serve.mjs). It installs
+# nothing: ./init.sh installs the packages first. It reads no secret and writes only dist/ in this folder (ignored
+# by git) and what npm and tsc keep in their own caches.
 set -eu
 cd "$(dirname "$0")"
 
@@ -25,5 +25,8 @@ if ! npm run build --silent; then
   exit 1
 fi
 
-# The calls to /api go to API_URL (see vite.config.ts); the default is http://localhost:8080.
-exec node_modules/.bin/vite preview --port "$PORT" --host 127.0.0.1 --strictPort
+# serve.mjs serves dist/ on HOST:PORT (HOST defaults to 127.0.0.1; the product start sets 0.0.0.0). It forwards
+# /api/ to API_URL (default http://localhost:8080) and /$S3_BUCKET/ to S3_ENDPOINT, as delta §9.3 says.
+HOST="${HOST:-127.0.0.1}"
+export HOST PORT
+exec node serve.mjs
