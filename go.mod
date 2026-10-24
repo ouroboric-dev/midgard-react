@@ -2,7 +2,7 @@ module github.com/ouroboric-dev/midgard-react
 
 go 1.26
 
-require github.com/ouroboric-dev/gungnir v0.0.0-20261018212656-f58d3b7bac28
+require github.com/ouroboric-dev/gungnir v0.0.0-20261024190432-abc73a1a1246
 
 require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect

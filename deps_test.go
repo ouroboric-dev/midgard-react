@@ -172,8 +172,8 @@ func TestTheBakedDepsPolicyIsValidAndTheRungReadsItFromBesideItself(t *testing.T
 		}
 	}
 	s, _ := os.ReadFile(filepath.Join("devcontainer", "checks", "web-deps.sh"))
-	if !strings.Contains(string(s), `"$here/config/deps-policy.json"`) || !strings.Contains(string(s), `web-protected.sh`) {
-		t.Error("web-deps.sh does not read the policy from beside itself, or does not run web-protected.sh first")
+	if !strings.Contains(string(s), `"$here/config/deps-policy.json"`) || !strings.Contains(string(s), `ygg_protected`) { // ygg_protected runs web-protected.sh (lib/result.sh)
+		t.Error("web-deps.sh does not read the policy from beside itself, or does not run its protected-files step first")
 	}
 }
 

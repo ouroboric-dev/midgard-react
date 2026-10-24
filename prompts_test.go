@@ -68,3 +68,15 @@ func TestPromptSaysWhenToStubTheStore(t *testing.T) {
 		}
 	}
 }
+
+// The typed answer (typed-boundaries T27): the implementer hands its answer back through submit, or as one
+// ygg.implement/v1 document, and finds its task's contract in its input task.
+func TestPromptAsksForTheTypedAnswer(t *testing.T) {
+	flat := strings.Join(strings.Fields(prompt(t, "implementer.md")), " ")
+	for _, want := range []string{"`submit`", "ygg.implement/v1", "`blocked`", "only when the work cannot be done",
+		"Your task's contract is in your input `task`, under The contract: copy it exactly"} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("prompts/implementer.md does not say %q", want)
+		}
+	}
+}

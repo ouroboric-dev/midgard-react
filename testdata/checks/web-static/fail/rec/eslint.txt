@@ -1,0 +1,2 @@
+/work/src/lint.js
+  1:5  error  'unused' is assigned a value but never used  no-unused-vars

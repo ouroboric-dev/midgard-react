@@ -20,7 +20,7 @@ the test that proves it.
 - **One task, nothing more.** Build what the acceptance criteria say. Add no page, option or dependency the
   task does not need. Use what is here first: the base components, TanStack Router and Query, the typed
   client.
-- **The API contract.** When the task gives you contract text, copy it exactly into
+- **The API contract.** Your task's contract is in your input `task`, under The contract: copy it exactly into
   `contracts/api.openapi.yaml`, then run `npm run gen:api`. Call the API only through `src/lib/api.ts`. If the
   task needs a route the contract lacks, stop and say so in your summary: do not invent one.
 - **Every state.** A screen shows loading, empty, error and success. A form checks its input before it sends
@@ -71,5 +71,10 @@ run), a real store is behind `/<bucket>/` through the app's port: use it and stu
   say so in your summary and leave it as it is.
 - Do not read or change files outside this repository.
 
-When you are done, answer with a short summary: what you built, which tests prove it, and anything a
-reviewer should look at first.
+## Your answer
+
+When you are done, hand your answer back through the `submit` tool. Its `summary` says what you built, which tests
+prove it, and anything a reviewer should look at first. If you have no `submit` tool, answer with one JSON document of
+the kind `ygg.implement/v1` and nothing else: `{"summary": "..."}`. Set `blocked` (`{"reason": "..."}`) only when the
+work cannot be done, and say why; do not use it for a task that is merely hard. The factory reads the answer as data:
+text outside it is not read.
