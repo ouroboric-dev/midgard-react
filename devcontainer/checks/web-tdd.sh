@@ -54,6 +54,7 @@ trap 'rc=$?; ygg_configs_remove; rm -rf -- "$parent"; ygg_finish "$rc"' EXIT
 git archive "$base" | tar -x -C "$parent"
 ln -s "$PWD/node_modules" "$parent/node_modules"
 # The parent runs the baked vite config too, not the one of the commit it was made from.
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$parent"
 for f in "${tests[@]}"; do
   mkdir -p "$parent/$(dirname "$f")"

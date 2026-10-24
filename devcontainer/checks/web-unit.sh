@@ -10,6 +10,7 @@ trap 'rc=$?; ygg_configs_remove; ygg_finish "$rc"' EXIT
 ygg_protected
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
 ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$PWD"
 if ygg_on; then
   ygg_tool vitest-json "$ygg_out/vitest.json"

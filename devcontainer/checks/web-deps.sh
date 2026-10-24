@@ -31,6 +31,7 @@ for tool in $tools; do
       ygg_osv
       ;;
     *)
+      ygg_stage policy "deps: unknown audit $tool"
       echo "deps: unknown audit $tool"
       exit 1
       ;;

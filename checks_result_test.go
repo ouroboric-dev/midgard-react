@@ -90,7 +90,8 @@ exit "$(cat "$rec/$t.exit" 2>/dev/null || echo 0)"
 type typedCase struct {
 	check, kase string
 	pass        bool
-	located     bool // a failure holds the tool's test id or location
+	located     bool   // a failure holds the tool's test id or location
+	names       string // else: a failure's message holds this, the most specific thing the converter's output has
 	env         func(t *testing.T) []string
 }
 
@@ -119,16 +120,19 @@ func TestEveryCheckWritesATypedResult(t *testing.T) {
 		return []string{"YGG_MOCK_PORT=" + strconv.Itoa(freePort(t)), "YGG_APP_PORT=" + strconv.Itoa(freePort(t)), "YGG_API_PORT=" + strconv.Itoa(freePort(t)), "YGG_E2E_WAIT=5"}
 	}
 	accept := func(t *testing.T) []string { return append(ports(t), "YGG_WEB_DIR=.") }
+	apiBreaks := func(t *testing.T) []string { return append(ports(t), "YGG_WEB_DIR=.", "YGG_API_DIR=api") }
+	// names is what the converter's output holds when the tool gives no test id or location: osv and npm audit name the
+	// package, oasdiff the path, vacuum the contract file, and a tdd refusal the file.
 	cases := []typedCase{
-		{"web-static", "pass", true, false, nil}, {"web-static", "fail", false, true, nil},
-		{"web-unit", "pass", true, false, nil}, {"web-unit", "fail", false, true, nil},
-		{"web-tdd", "pass", true, false, nil}, {"web-tdd", "fail", false, false, nil},
-		{"web-contract", "pass", true, false, nil}, {"web-contract", "fail", false, false, nil},
-		{"web-deps", "pass", true, false, nil}, {"web-deps", "fail", false, false, nil}, {"web-deps", "unpinned", false, false, nil},
-		{"web-security", "pass", true, false, nil}, {"web-security", "fail", false, false, nil},
-		{"web-e2e", "pass", true, false, ports}, {"web-e2e", "fail", false, true, ports},
-		{"accept-e2e", "pass", true, false, accept}, {"accept-e2e", "fail", false, true, accept},
-		{"accept-e2e", "api-breaks", false, false, func(t *testing.T) []string { return append(ports(t), "YGG_WEB_DIR=.", "YGG_API_DIR=api") }},
+		{"web-static", "pass", true, false, "", nil}, {"web-static", "fail", false, true, "", nil},
+		{"web-unit", "pass", true, false, "", nil}, {"web-unit", "fail", false, true, "", nil},
+		{"web-tdd", "pass", true, false, "", nil}, {"web-tdd", "fail", false, false, "src/b.ts", nil},
+		{"web-contract", "pass", true, false, "", nil}, {"web-contract", "fail", false, false, "contracts/api.openapi.yaml", nil},
+		{"web-deps", "pass", true, false, "", nil}, {"web-deps", "fail", false, false, "golang.org/x/text", nil}, {"web-deps", "unpinned", false, false, "react", nil},
+		{"web-security", "pass", true, false, "", nil}, {"web-security", "fail", false, false, "lodash", nil},
+		{"web-e2e", "pass", true, false, "", ports}, {"web-e2e", "fail", false, true, "", ports},
+		{"accept-e2e", "pass", true, false, "", accept}, {"accept-e2e", "fail", false, true, "", accept},
+		{"accept-e2e", "api-breaks", false, false, "/pets", apiBreaks},
 	}
 	for _, c := range cases {
 		t.Run(c.check+"/"+c.kase, func(t *testing.T) {
@@ -189,6 +193,13 @@ func TestEveryCheckWritesATypedResult(t *testing.T) {
 			if c.located && !located {
 				t.Errorf("no failure holds a test id or a location:\n%s", b)
 			}
+			named := false
+			for _, f := range r.Failures {
+				named = named || strings.Contains(f.Message, c.names) || strings.Contains(f.Test, c.names) || strings.Contains(f.Location, c.names)
+			}
+			if !c.located && !named {
+				t.Errorf("no failure names %q:\n%s", c.names, b)
+			}
 		})
 	}
 }
@@ -208,7 +219,7 @@ func TestACheckWritesNoResultWithoutTheVariable(t *testing.T) {
 // first step of a rung.
 func TestAProtectedFileChangeIsAPolicyFailureOfEachRung(t *testing.T) {
 	conv := converterBin(t)
-	for _, name := range []string{"web-protected.sh", "web-unit.sh", "web-security.sh"} {
+	for _, name := range []string{"web-protected.sh", "web-unit.sh", "web-security.sh", "web-deps.sh"} {
 		t.Run(name, func(t *testing.T) {
 			dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"})
 			work(t, dir, map[string]string{".npmrc": "ignore-scripts=false\n", "tsconfig.json": "{}"})
@@ -237,5 +248,30 @@ func TestAProtectedFileChangeIsAPolicyFailureOfEachRung(t *testing.T) {
 				t.Errorf("want two policy failures, one for each file:\n%s", b)
 			}
 		})
+	}
+}
+
+// A step after npm ci that fails is reported as itself, not as the install that came before it.
+func TestAFailedConfigInstallIsNotReportedAsNpmCi(t *testing.T) {
+	conv := converterBin(t)
+	bin := t.TempDir()
+	webTools(t, bin, map[string]string{"vitest": ""})
+	stub(t, bin, "install", "echo 'install: cannot create' >&2\nexit 1\n")
+	dir := repo(t, map[string]string{"package.json": "{}", ".gitignore": "node_modules/\n"})
+	result := filepath.Join(t.TempDir(), "r.json")
+	code, out := script(t, dir, bin, "web-unit.sh", "YGG_CHECK_RESULT="+result, "PATH="+conv+":"+bin+":"+os.Getenv("PATH"))
+	if code == 0 {
+		t.Fatalf("passed\n%s", out)
+	}
+	b, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatalf("no result: %v\n%s", err, out)
+	}
+	r, err := schema.Decode[schema.CheckResult](schema.ContractCheck, b)
+	if err != nil || len(r.Failures) == 0 {
+		t.Fatalf("%v\n%s", err, b)
+	}
+	if m := r.Failures[0].Message; strings.Contains(m, "npm ci") || !strings.Contains(m, "tool configs") {
+		t.Errorf("the failure says %q, want the config install", m)
 	}
 }

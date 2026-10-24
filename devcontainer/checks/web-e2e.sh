@@ -39,6 +39,7 @@ wait_for() { # port name
 ygg_protected
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
 ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$PWD"
 echo "== mock API from contracts/api.openapi.yaml"
 prism mock --host 127.0.0.1 --port "$mock_port" contracts/api.openapi.yaml >"$log/mock.log" 2>&1 &

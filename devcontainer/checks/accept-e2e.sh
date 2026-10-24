@@ -87,6 +87,7 @@ echo "== build the web app"
 # shellcheck disable=SC2016 # the script is bash -c's, expanded there
 ygg_logged build "npm ci failed" bash -c 'cd "$1" && npm ci --ignore-scripts --no-audit --no-fund' _ "$web"
 # The baked configs go in after the install and are the only ones the tools read (web-configs.sh).
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$web"
 # shellcheck disable=SC2016 # the script is bash -c's, expanded there
 ygg_logged build "tsc or vite build failed" bash -c 'cd "$1" && node_modules/.bin/tsc --noEmit -p .ygg-tsconfig.json && node_modules/.bin/vite build --config .ygg-vite.config.ts' _ "$web"

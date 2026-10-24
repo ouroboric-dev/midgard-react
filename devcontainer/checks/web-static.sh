@@ -21,6 +21,7 @@ ygg_tsc() {
 # runs. The tools are called by path, not through the scripts of package.json, and with the baked configs.
 echo "== npm ci"
 ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$PWD"
 echo "== eslint"
 if ygg_on; then
