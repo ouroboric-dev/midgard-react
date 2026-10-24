@@ -11,10 +11,15 @@ set -euo pipefail
 unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
 # shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
+# shellcheck source-path=SCRIPTDIR source=lib/result.sh
+. "$(dirname "$0")/lib/result.sh"
+trap 'rc=$?; ygg_finish "$rc"' EXIT
+ygg_stage other "tdd: this leaf has no main to compare with"
 base="$(git merge-base HEAD refs/heads/main)" || { echo "tdd: this leaf has no main to compare with"; exit 1; }
-"$(dirname "$0")/web-protected.sh"
+ygg_protected
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
-npm ci --ignore-scripts --no-audit --no-fund
+ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
+ygg_stage other "tdd: the check could not finish"
 
 tests=() code=() specs=()
 while IFS= read -r f; do
@@ -29,6 +34,7 @@ done < <(git diff --no-renames --name-only --diff-filter=d "$base" HEAD -- 'src/
 
 if [ ${#tests[@]} -eq 0 ]; then
   if [ ${#code[@]} -gt 0 ] && [ ${#specs[@]} -eq 0 ]; then
+    ygg_stage test "tdd: app code changed without a new or changed unit test: ${code[*]}. Write the test first, see it fail, then write the code."
     echo "tdd: app code changed without a new or changed unit test:"
     printf '  %s\n' "${code[@]}"
     echo "Write the test first, see it fail, then write the code."
@@ -44,10 +50,11 @@ if [ ${#tests[@]} -eq 0 ]; then
 fi
 
 parent="$(mktemp -d)"
-trap 'ygg_configs_remove; rm -rf -- "$parent"' EXIT
+trap 'rc=$?; ygg_configs_remove; rm -rf -- "$parent"; ygg_finish "$rc"' EXIT
 git archive "$base" | tar -x -C "$parent"
 ln -s "$PWD/node_modules" "$parent/node_modules"
 # The parent runs the baked vite config too, not the one of the commit it was made from.
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$parent"
 for f in "${tests[@]}"; do
   mkdir -p "$parent/$(dirname "$f")"
@@ -55,6 +62,7 @@ for f in "${tests[@]}"; do
 done
 log="$parent/.tdd.log"
 if (cd "$parent" && node_modules/.bin/vitest run --config .ygg-vite.config.ts "${tests[@]}") >"$log" 2>&1; then
+  ygg_stage test "tdd: the new tests pass on the commit the task started from, so they test nothing new: ${tests[*]}. A test of new behaviour fails before the code for it exists."
   echo "tdd: the new tests pass on the commit the task started from, so they test nothing new:"
   printf '  %s\n' "${tests[@]}"
   echo "A test of new behaviour fails before the code for it exists. Change the tests so they do."

@@ -1,0 +1,1 @@
+contracts/api.openapi.yaml: 12:3 error operation-operationId: the operation has no operationId

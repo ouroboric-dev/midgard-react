@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -172,8 +173,19 @@ func TestTheBakedDepsPolicyIsValidAndTheRungReadsItFromBesideItself(t *testing.T
 		}
 	}
 	s, _ := os.ReadFile(filepath.Join("devcontainer", "checks", "web-deps.sh"))
-	if !strings.Contains(string(s), `"$here/config/deps-policy.json"`) || !strings.Contains(string(s), `web-protected.sh`) {
-		t.Error("web-deps.sh does not read the policy from beside itself, or does not run web-protected.sh first")
+	if !strings.Contains(string(s), `"$here/config/deps-policy.json"`) {
+		t.Error("web-deps.sh does not read the policy from beside itself")
+	}
+	// The protected-files step: web-deps.sh calls ygg_protected before anything else, and ygg_protected runs
+	// web-protected.sh (the behaviour is tested in TestAProtectedFileChangeIsAPolicyFailureOfEachRung).
+	body := string(s)
+	if i, j := strings.Index(body, "\nygg_protected\n"), strings.Index(body, "webdeps.mjs"); i < 0 || j < 0 || i > j {
+		t.Error("web-deps.sh does not run ygg_protected before the policy check")
+	}
+	lib, _ := os.ReadFile(filepath.Join("devcontainer", "checks", "lib", "result.sh"))
+	m := regexp.MustCompile(`(?s)\nygg_protected\(\) \{.*?\n\}\n`).FindString(string(lib))
+	if !strings.Contains(m, `"$here/web-protected.sh"`) {
+		t.Errorf("ygg_protected in lib/result.sh does not run web-protected.sh:\n%s", m)
 	}
 }
 

@@ -8,25 +8,30 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 policy="$here/config/deps-policy.json"
-"$here/web-protected.sh"
+# shellcheck source-path=SCRIPTDIR source=lib/result.sh
+. "$here/lib/result.sh"
+trap 'rc=$?; ygg_finish "$rc"' EXIT
+ygg_protected
 echo "== dependency policy"
-node "$here/lib/webdeps.mjs" check "$policy"
+ygg_lines policy "deps policy" node "$here/lib/webdeps.mjs" check "$policy"
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
-npm ci --ignore-scripts --no-audit --no-fund
+ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
 # The lock file is the agent's text: check what was installed, too, before any audit.
-node "$here/lib/webdeps.mjs" installed "$policy"
+ygg_lines policy "deps policy" node "$here/lib/webdeps.mjs" installed "$policy"
+ygg_stage other "deps: the audit tools could not be listed"
 tools="$(node "$here/lib/webdeps.mjs" audit "$policy")"
 for tool in $tools; do
   case "$tool" in
     npm-audit)
       echo "== npm audit"
-      npm audit --audit-level=high
+      ygg_npm_audit
       ;;
     osv)
       echo "== OSV"
-      osv-scanner scan source -L package-lock.json
+      ygg_osv
       ;;
     *)
+      ygg_stage policy "deps: unknown audit $tool"
       echo "deps: unknown audit $tool"
       exit 1
       ;;

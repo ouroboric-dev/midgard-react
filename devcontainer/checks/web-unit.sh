@@ -4,9 +4,17 @@
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=web-configs.sh
 . "$(dirname "$0")/web-configs.sh"
-trap ygg_configs_remove EXIT
-"$(dirname "$0")/web-protected.sh"
+# shellcheck source-path=SCRIPTDIR source=lib/result.sh
+. "$(dirname "$0")/lib/result.sh"
+trap 'rc=$?; ygg_configs_remove; ygg_finish "$rc"' EXIT
+ygg_protected
 # A clean install first: npm ci deletes node_modules, which the agent can write, so no tool it left there runs.
-npm ci --ignore-scripts --no-audit --no-fund
+ygg_logged build "npm ci failed" npm ci --ignore-scripts --no-audit --no-fund
+ygg_stage build "the baked tool configs could not be installed in the leaf"
 ygg_configs_install "$PWD"
-node_modules/.bin/vitest run --config .ygg-vite.config.ts
+if ygg_on; then
+  ygg_tool vitest-json "$ygg_out/vitest.json"
+  node_modules/.bin/vitest run --config .ygg-vite.config.ts --reporter=default --reporter=json --outputFile.json="$ygg_out/vitest.json"
+else
+  node_modules/.bin/vitest run --config .ygg-vite.config.ts
+fi
