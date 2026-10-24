@@ -21,7 +21,7 @@ import (
 
 // gleipnirPin is the gleipnir that holds the converter (gleipnir#22), read from the module cache; the realm does not
 // require gleipnir.
-const gleipnirPin = "github.com/ouroboric-dev/gleipnir@v0.0.0-20261024192006-9da064f0b1ee"
+const gleipnirPin = "github.com/ouroboric-dev/gleipnir@v0.0.0-20261024195951-fdb5c70ce2de"
 
 // converterBin returns a folder with the command ygg-check-result, as the work image has it.
 func converterBin(t *testing.T) string {
